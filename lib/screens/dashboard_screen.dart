@@ -24,6 +24,14 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   AppScheme get c => AppColors.of(context);
   int _selectedLocationIndex = 0;
+
+  // Для admin: выбранная компания (null = ни одна не выбрана)
+  int? _adminSelectedLocationId;
+
+  // Поиск компаний для admin
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+
   final GlobalKey _schemaKey = GlobalKey();
 
   // Контроллер трансформации для InteractiveViewer (зум + пан)
@@ -34,16 +42,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Временные позиции датчиков (оригиналы до начала редактирования)
   final Map<int, (double, double)> _draftPositions = {};
 
+  bool get _isAdmin => widget.repo.role == UserRole.admin;
+
   @override
   void dispose() {
     _transformCtrl.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
-    // Загружаем историю за 24ч для всех датчиков текущей локации
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadCharts());
   }
 
@@ -65,12 +75,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => _DarkDialog(
-          title: 'Новая локация',
+          title: 'Новая компания',
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _DarkField(controller: nameCtrl, label: 'Название локации'),
+              _DarkField(controller: nameCtrl, label: 'Название компании'),
               const SizedBox(height: 14),
               if (pickedFile != null) ...[
                 Container(
@@ -143,7 +153,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 if (name.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                          content: Text('Введите название локации')));
+                          content: Text('Введите название компании')));
                   return;
                 }
                 final createErr =
@@ -173,8 +183,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text(uploadErr == null
-                          ? 'Локация создана с планом'
-                          : 'Локация создана, план не загрузился: $uploadErr'),
+                          ? 'Компания создана с планом'
+                          : 'Компания создана, план не загрузился: $uploadErr'),
                     ));
                     await widget.onRefresh();
                     return;
@@ -182,7 +192,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 }
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Локация создана')));
+                    const SnackBar(content: Text('Компания создана')));
                 await widget.onRefresh();
               },
             ),
@@ -285,26 +295,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   List<SensorModel> get _sensorsForCurrentLocation {
+    if (_isAdmin) {
+      if (_adminSelectedLocationId == null) return [];
+      return widget.repo.sensors
+          .where((s) => s.groupId == _adminSelectedLocationId)
+          .toList();
+    }
     if (widget.repo.locations.isEmpty) return widget.repo.sensors;
     final id = widget.repo.locations[_selectedLocationIndex].id;
     return widget.repo.sensors.where((s) => s.groupId == id).toList();
   }
 
-  /// Плавное перемещение датчика в режиме редактирования.
-  /// В режиме редактирования карта статична (масштаб 1.0),
-  /// поэтому delta.dx/dy применяются напрямую.
   void _onSensorPanUpdate(SensorModel sensor, Offset delta) {
     final box = _schemaKey.currentContext?.findRenderObject() as RenderBox?;
     final schemaW = box?.size.width  ?? 300.0;
     final schemaH = box?.size.height ?? 300.0;
 
     setState(() {
-      sensor.x = (sensor.x + delta.dx).clamp(0.0, schemaW - 16.0);
-      sensor.y = (sensor.y + delta.dy).clamp(0.0, schemaH - 16.0);
+      sensor.x = (sensor.x + delta.dx / schemaW).clamp(0.0, 1.0);
+      sensor.y = (sensor.y + delta.dy / schemaH).clamp(0.0, 1.0);
     });
   }
 
-  // Войти в режим редактирования: запоминаем текущие позиции как черновик
   void _enterEditMode() {
     setState(() {
       _editMode = true;
@@ -315,7 +327,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  // Отмена: восстанавливаем позиции из черновика (они там были до изменений)
   void _cancelEditMode() {
     setState(() {
       for (final s in widget.repo.sensors) {
@@ -330,13 +341,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  // Подтвердить: отправляем все изменённые позиции на сервер
   Future<void> _confirmEditMode() async {
     final changed = widget.repo.sensors.where(
       (s) {
         final orig = _draftPositions[s.id];
         if (orig == null) return false;
-        return (s.x - orig.$1).abs() > 0.5 || (s.y - orig.$2).abs() > 0.5;
+        return (s.x - orig.$1).abs() > 0.002 || (s.y - orig.$2).abs() > 0.002;
       },
     ).toList();
 
@@ -403,28 +413,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final c = AppColors.of(context);
-    final canManage = widget.repo.role == UserRole.admin;
-    final locations = widget.repo.locations;
-    final currentLocation =
-        locations.isNotEmpty ? locations[_selectedLocationIndex] : null;
-    final sensors = _sensorsForCurrentLocation;
-    final alarms = widget.repo.alarms.take(5).toList();
 
     return Theme(
       data: ThemeData.dark().copyWith(
-        colorScheme:  ColorScheme.dark(primary: c.cyan),
+        colorScheme: ColorScheme.dark(primary: c.cyan),
       ),
-      child: Container(
-        color: c.bg,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
-          children: [
-            // ── Заголовок + кнопка ────────────────────────────────────────────
-            Row(
+      child: _isAdmin ? _buildAdminView(c) : _buildUserView(c),
+    );
+  }
+
+  // ── Вид администратора ────────────────────────────────────────────────────
+
+  Widget _buildAdminView(AppScheme c) {
+    final locations = widget.repo.locations;
+
+    // Фильтрованный список по поисковому запросу
+    final filtered = _searchQuery.isEmpty
+        ? locations
+        : locations
+            .where((l) =>
+                l.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+            .toList();
+
+    // Сортировка по алфавиту
+    final sorted = List.of(filtered)
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    // Если компания выбрана — показываем её содержимое
+    if (_adminSelectedLocationId != null) {
+      final loc = locations
+          .where((l) => l.id == _adminSelectedLocationId)
+          .firstOrNull;
+      return _buildCompanyContent(c, loc);
+    }
+
+    // Иначе — экран выбора компании
+    return Container(
+      color: c.bg,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Заголовок ──────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 16, 14, 0),
+            child: Row(
               children: [
                 const Expanded(
                   child: Text(
-                    'Мониторинг',
+                    'Компании',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 20,
@@ -433,235 +469,560 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                 ),
-                if (canManage)
-                  GestureDetector(
-                    onTap: _showCreateLocationDialog,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: c.yellowBg,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: c.accent.withOpacity(0.5)),
-                      ),
-                      child: Text(
-                        '+ Локация',
-                        style: TextStyle(
-                          color: c.accent,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
+                GestureDetector(
+                  onTap: _showCreateLocationDialog,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: c.yellowBg,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: c.accent.withOpacity(0.5)),
+                    ),
+                    child: Text(
+                      '+ Компания',
+                      style: TextStyle(
+                        color: c.accent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
+                ),
               ],
             ),
+          ),
 
-            const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
-            // ── Переключатель локаций ─────────────────────────────────────────
-            if (locations.length > 1) ...[
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  spacing: 6,
-                  children: locations.asMap().entries.map((e) {
-                    final selected = e.key == _selectedLocationIndex;
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() => _selectedLocationIndex = e.key);
-                        _loadCharts();
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? c.cyan.withOpacity(0.12)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: selected
-                                ? c.cyan.withOpacity(0.6)
-                                : c.border,
-                          ),
+          // ── Поиск ─────────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: TextField(
+              controller: _searchCtrl,
+              style: TextStyle(color: Colors.white, fontSize: 14),
+              onChanged: (v) => setState(() => _searchQuery = v),
+              decoration: InputDecoration(
+                hintText: 'Поиск компании…',
+                hintStyle: TextStyle(color: c.textDim, fontSize: 13),
+                prefixIcon: Icon(Icons.search, color: c.textDim, size: 18),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? GestureDetector(
+                        onTap: () {
+                          _searchCtrl.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                        child: Icon(Icons.close, color: c.textDim, size: 16),
+                      )
+                    : null,
+                filled: true,
+                fillColor: c.card,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: c.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: c.cyan),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // ── Алфавитный список ─────────────────────────────────────────────
+          Expanded(
+            child: sorted.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.business_outlined,
+                            size: 48, color: c.textDim),
+                        const SizedBox(height: 12),
+                        Text(
+                          _searchQuery.isNotEmpty
+                              ? 'Компании не найдены'
+                              : 'Нет компаний\nНажмите «+ Компания» чтобы создать',
+                          style: TextStyle(color: c.textDim, fontSize: 13),
+                          textAlign: TextAlign.center,
                         ),
-                        child: Text(
-                          e.value.name,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: selected
-                                ? FontWeight.w700
-                                : FontWeight.w400,
-                            color: selected ? c.cyan : c.textDim,
-                          ),
+                      ],
+                    ),
+                  )
+                : _buildAlphaList(c, sorted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlphaList(AppScheme c, List<dynamic> sorted) {
+    // Группируем по первой букве
+    final Map<String, List<dynamic>> groups = {};
+    for (final loc in sorted) {
+      final letter = loc.name.isNotEmpty
+          ? loc.name[0].toUpperCase()
+          : '#';
+      groups.putIfAbsent(letter, () => []).add(loc);
+    }
+    final letters = groups.keys.toList()..sort();
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
+      itemCount: letters.length,
+      itemBuilder: (context, i) {
+        final letter = letters[i];
+        final items = groups[letter]!;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Буква-разделитель
+            Padding(
+              padding: const EdgeInsets.only(top: 10, bottom: 4),
+              child: Text(
+                letter,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: c.textDim,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
+            ...items.map((loc) => _CompanyTile(
+                  name: loc.name,
+                  sensorCount: widget.repo.sensors
+                      .where((s) => s.groupId == loc.id)
+                      .length,
+                  onTap: () {
+                    setState(() {
+                      _adminSelectedLocationId = loc.id as int;
+                      _editMode = false;
+                    });
+                    _loadCharts();
+                  },
+                  c: c,
+                )),
+          ],
+        );
+      },
+    );
+  }
+
+  // ── Содержимое выбранной компании (для admin) ─────────────────────────────
+
+  Widget _buildCompanyContent(AppScheme c, dynamic currentLocation) {
+    final sensors = _sensorsForCurrentLocation;
+    final alarms  = widget.repo.alarms.take(5).toList();
+
+    return Container(
+      color: c.bg,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
+        children: [
+          // ── Навигация назад + название ─────────────────────────────────────
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => setState(() {
+                  _adminSelectedLocationId = null;
+                  _editMode = false;
+                }),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: c.card,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: c.border),
+                  ),
+                  child: Icon(Icons.arrow_back_ios_new,
+                      size: 14, color: c.textDim),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  currentLocation?.name ?? '',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // ── Мнемосхема ────────────────────────────────────────────────────
+          _buildSchemaCard(c, currentLocation, sensors, canManage: true),
+
+          const SizedBox(height: 14),
+
+          // ── Датчики ───────────────────────────────────────────────────────
+          if (sensors.isNotEmpty) ...[
+            _SectionHeader(label: 'Датчики', count: sensors.length),
+            const SizedBox(height: 8),
+            DefaultTextStyle(
+              style: const TextStyle(color: Colors.white),
+              child: Column(
+                children:
+                    sensors.take(8).map((s) => _SensorRow(sensor: s)).toList(),
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          // ── Последние тревоги ─────────────────────────────────────────────
+          if (alarms.isNotEmpty) ...[
+            _SectionHeader(
+                label: 'Последние события', count: alarms.length),
+            const SizedBox(height: 8),
+            DefaultTextStyle(
+              style: const TextStyle(color: Colors.white),
+              child: Column(
+                children: alarms
+                    .map((alarm) => _AlarmRow(
+                          alarm: alarm,
+                          color: _alarmColor(alarm.status),
+                          bgColor: _alarmBg(alarm.status),
+                          label: _alarmLabel(alarm.status),
+                        ))
+                    .toList(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Вид обычного пользователя (editor / viewer) ───────────────────────────
+
+  Widget _buildUserView(AppScheme c) {
+    final locations = widget.repo.locations;
+    final currentLocation =
+        locations.isNotEmpty ? locations[_selectedLocationIndex] : null;
+    final sensors = _sensorsForCurrentLocation;
+    final alarms  = widget.repo.alarms.take(5).toList();
+
+    return Container(
+      color: c.bg,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
+        children: [
+          // ── Заголовок ──────────────────────────────────────────────────────
+          const Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Мониторинг',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // ── Переключатель локаций ─────────────────────────────────────────
+          if (locations.length > 1) ...[
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                spacing: 6,
+                children: locations.asMap().entries.map((e) {
+                  final selected = e.key == _selectedLocationIndex;
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() => _selectedLocationIndex = e.key);
+                      _loadCharts();
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? c.cyan.withOpacity(0.12)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: selected
+                              ? c.cyan.withOpacity(0.6)
+                              : c.border,
                         ),
                       ),
-                    );
-                  }).toList(),
-                ),
+                      child: Text(
+                        e.value.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                          color: selected ? c.cyan : c.textDim,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
-              SizedBox(height: 10),
-            ],
+            ),
+            const SizedBox(height: 10),
+          ],
 
-            // ── Мнемосхема ───────────────────────────────────────────────────
-            Container(
-              decoration: BoxDecoration(
-                color: c.card,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: _editMode ? c.accent.withOpacity(0.6) : c.border,
-                  width: _editMode ? 1.5 : 1,
-                ),
-              ),
+          // ── Мнемосхема ────────────────────────────────────────────────────
+          // editor и viewer не могут менять план и позиции датчиков
+          _buildSchemaCard(
+            c,
+            currentLocation,
+            sensors,
+            canManage: false,
+          ),
+
+          const SizedBox(height: 14),
+
+          // ── Датчики ───────────────────────────────────────────────────────
+          if (sensors.isNotEmpty) ...[
+            _SectionHeader(label: 'Датчики', count: sensors.length),
+            const SizedBox(height: 8),
+            DefaultTextStyle(
+              style: const TextStyle(color: Colors.white),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // ── Карта с датчиками ───────────────────────────────────────
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(9)),
-                    child: _editMode
-                        // ── РЕЖИМ РЕДАКТИРОВАНИЯ: ширина экрана, высота по аспекту ──
-                        ? _EditableSchema(
-                            key: _schemaKey,
-                            imageUrl: currentLocation?.imageUrl != null
-                                ? _resolveImageUrl(
-                                    currentLocation!.imageUrl!,
-                                    widget.repo.baseUrl,
-                                  )
-                                : null,
-                            sensors: sensors,
-                            onPanUpdate: _onSensorPanUpdate,
-                          )
-                        // ── РЕЖИМ ПРОСМОТРА: InteractiveViewer (зум + пан) ───
-                        : currentLocation?.imageUrl != null
-                            ? _SchemaViewport(
-                                key: _schemaKey,
-                                imageUrl: _resolveImageUrl(
-                                  currentLocation!.imageUrl!,
-                                  widget.repo.baseUrl,
-                                ),
-                                sensors: sensors,
-                                transformCtrl: _transformCtrl,
-                                textDim: c.textDim,
-                              )
-                            : Container(
-                                height: 200,
-                                color: const Color(0xFF060E0F),
-                                alignment: Alignment.center,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.map_outlined,
-                                        size: 36, color: c.textDim),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      canManage
-                                          ? 'Нажмите «+ Локация» чтобы загрузить план'
-                                          : 'Мнемосхема не загружена',
-                                      style: TextStyle(
-                                          color: c.textDim, fontSize: 12),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                  ),
+                children:
+                    sensors.take(8).map((s) => _SensorRow(sensor: s)).toList(),
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
 
-                  // ── Панель с кнопками (под картинкой, всегда видна) ─────────
-                  if (_editMode || (canManage && currentLocation != null))
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                          bottom: Radius.circular(9)),
-                      child: Container(
-                        color: c.card2,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 8),
-                        child: Row(
+          // ── Последние тревоги ─────────────────────────────────────────────
+          if (alarms.isNotEmpty) ...[
+            _SectionHeader(
+                label: 'Последние события', count: alarms.length),
+            const SizedBox(height: 8),
+            DefaultTextStyle(
+              style: const TextStyle(color: Colors.white),
+              child: Column(
+                children: alarms
+                    .map((alarm) => _AlarmRow(
+                          alarm: alarm,
+                          color: _alarmColor(alarm.status),
+                          bgColor: _alarmBg(alarm.status),
+                          label: _alarmLabel(alarm.status),
+                        ))
+                    .toList(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Карточка мнемосхемы (общая для admin и user) ──────────────────────────
+
+  Widget _buildSchemaCard(
+    AppScheme c,
+    dynamic currentLocation,
+    List<SensorModel> sensors, {
+    required bool canManage,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: c.card,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: _editMode ? c.accent.withOpacity(0.6) : c.border,
+          width: _editMode ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ClipRRect(
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(9)),
+            child: _editMode
+                ? _EditableSchema(
+                    key: _schemaKey,
+                    imageUrl: currentLocation?.imageUrl != null
+                        ? _resolveImageUrl(
+                            currentLocation!.imageUrl!,
+                            widget.repo.baseUrl,
+                          )
+                        : null,
+                    sensors: sensors,
+                    onPanUpdate: _onSensorPanUpdate,
+                  )
+                : currentLocation?.imageUrl != null
+                    ? _SchemaViewport(
+                        key: _schemaKey,
+                        imageUrl: _resolveImageUrl(
+                          currentLocation!.imageUrl!,
+                          widget.repo.baseUrl,
+                        ),
+                        sensors: sensors,
+                        transformCtrl: _transformCtrl,
+                        textDim: c.textDim,
+                      )
+                    : Container(
+                        height: 200,
+                        color: const Color(0xFF060E0F),
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (_editMode) ...[
-                              Icon(Icons.open_with,
-                                  size: 13, color: c.accent),
-                              const SizedBox(width: 5),
-                              Expanded(
-                                child: Text(
-                                  'Тащите датчики, затем нажмите ✓',
-                                  style: TextStyle(
-                                      color: c.accent,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                              GestureDetector(
-                                onTap: _cancelEditMode,
-                                child: _SchemaBtn(
-                                    label: '✕ отмена', color: c.red),
-                              ),
-                              const SizedBox(width: 6),
-                              GestureDetector(
-                                onTap: _confirmEditMode,
-                                child: _SchemaBtn(
-                                    label: '✓ сохранить', color: c.green),
-                              ),
-                            ] else ...[
-                              const Spacer(),
-                              GestureDetector(
-                                onTap: () => _showUploadPlanDialog(
-                                  currentLocation!.id,
-                                  currentLocation.name,
-                                ),
-                                child: _SchemaBtn(
-                                    label: '↑ план', color: c.cyan),
-                              ),
-                              const SizedBox(width: 6),
-                              GestureDetector(
-                                onTap: _enterEditMode,
-                                child: _SchemaBtn(
-                                    label: '✎ датчики', color: c.accent),
-                              ),
-                            ],
+                            Icon(Icons.map_outlined,
+                                size: 36, color: c.textDim),
+                            const SizedBox(height: 8),
+                            Text(
+                              canManage
+                                  ? 'Нажмите «↑ план» чтобы загрузить мнемосхему'
+                                  : 'Мнемосхема не загружена',
+                              style: TextStyle(
+                                  color: c.textDim, fontSize: 12),
+                              textAlign: TextAlign.center,
+                            ),
                           ],
                         ),
                       ),
+          ),
+
+          // Панель кнопок под картинкой
+          if (_editMode || (canManage && currentLocation != null))
+            ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(9)),
+              child: Container(
+                color: c.card2,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Row(
+                  children: [
+                    if (_editMode) ...[
+                      Icon(Icons.open_with, size: 13, color: c.accent),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          'Тащите датчики, затем нажмите ✓',
+                          style: TextStyle(
+                              color: c.accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: _cancelEditMode,
+                        child:
+                            _SchemaBtn(label: '✕ отмена', color: c.red),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: _confirmEditMode,
+                        child: _SchemaBtn(
+                            label: '✓ сохранить', color: c.green),
+                      ),
+                    ] else ...[
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => _showUploadPlanDialog(
+                          currentLocation!.id as int,
+                          currentLocation.name as String,
+                        ),
+                        child:
+                            _SchemaBtn(label: '↑ план', color: c.cyan),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: _enterEditMode,
+                        child: _SchemaBtn(
+                            label: '✎ датчики', color: c.accent),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Плитка компании ───────────────────────────────────────────────────────────
+
+class _CompanyTile extends StatelessWidget {
+  const _CompanyTile({
+    required this.name,
+    required this.sensorCount,
+    required this.onTap,
+    required this.c,
+  });
+  final String name;
+  final int sensorCount;
+  final VoidCallback onTap;
+  final AppScheme c;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: c.card,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: c.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: c.cyan.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: c.cyan.withOpacity(0.25)),
+              ),
+              alignment: Alignment.center,
+              child: Icon(Icons.business_outlined, size: 18, color: c.cyan),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
                     ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$sensorCount датч.',
+                    style: TextStyle(fontSize: 11, color: c.textDim),
+                  ),
                 ],
               ),
             ),
-
-            const SizedBox(height: 14),
-
-            // ── Датчики текущей локации ───────────────────────────────────────
-            if (sensors.isNotEmpty) ...[
-              _SectionHeader(label: 'Датчики', count: sensors.length),
-              const SizedBox(height: 8),
-              DefaultTextStyle(
-                style:  TextStyle(color: Colors.white),
-                child: Column(
-                  children: sensors.take(8).map((s) => _SensorRow(sensor: s)).toList(),
-                ),
-              ),
-              const SizedBox(height: 14),
-            ],
-
-            // ── Последние тревоги ─────────────────────────────────────────────
-            if (alarms.isNotEmpty) ...[
-              _SectionHeader(
-                  label: 'Последние события', count: alarms.length),
-              const SizedBox(height: 8),
-              DefaultTextStyle(
-                style:  TextStyle(color: Colors.white),
-                child: Column(
-                  children: alarms.map((alarm) => _AlarmRow(
-                        alarm: alarm,
-                        color: _alarmColor(alarm.status),
-                        bgColor: _alarmBg(alarm.status),
-                        label: _alarmLabel(alarm.status),
-                      )).toList(),
-                ),
-              ),
-            ],
+            Icon(Icons.chevron_right, size: 18, color: c.textDim),
           ],
         ),
       ),
@@ -683,14 +1044,14 @@ class _SectionHeader extends StatelessWidget {
       children: [
         Text(
           label.toUpperCase(),
-          style:  TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
             color: c.textDim,
             letterSpacing: 1.2,
           ),
         ),
-        SizedBox(width: 8),
+        const SizedBox(width: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
           decoration: BoxDecoration(
@@ -700,7 +1061,7 @@ class _SectionHeader extends StatelessWidget {
           ),
           child: Text(
             '$count',
-            style:  TextStyle(
+            style: TextStyle(
               fontSize: 10,
               color: c.textDim,
               fontWeight: FontWeight.w600,
@@ -724,7 +1085,7 @@ class _SensorRow extends StatefulWidget {
 
 class _SensorRowState extends State<_SensorRow> {
   AppScheme get c => AppColors.of(context);
-  bool _showTemp = true; // true = температура, false = влажность
+  bool _showTemp = true;
 
   SensorModel get s => widget.sensor;
 
@@ -776,16 +1137,13 @@ class _SensorRowState extends State<_SensorRow> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Цветная полоска состояния
               Container(width: 4, color: _stateColor),
-
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ── Строка: онлайн + имя + чипы ─────────────────────────
                       Row(
                         children: [
                           Container(
@@ -795,9 +1153,11 @@ class _SensorRowState extends State<_SensorRow> {
                               shape: BoxShape.circle,
                               color: s.isOnline ? c.green : c.red,
                               boxShadow: s.isOnline
-                                  ? [BoxShadow(
-                                      color: c.green.withOpacity(0.5),
-                                      blurRadius: 5)]
+                                  ? [
+                                      BoxShadow(
+                                          color: c.green.withOpacity(0.5),
+                                          blurRadius: 5)
+                                    ]
                                   : null,
                             ),
                           ),
@@ -805,7 +1165,7 @@ class _SensorRowState extends State<_SensorRow> {
                           Expanded(
                             child: Text(
                               s.name,
-                              style:  TextStyle(
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -816,7 +1176,7 @@ class _SensorRowState extends State<_SensorRow> {
                           _MetricChip(
                               value: '${s.temperature.toStringAsFixed(1)}°C',
                               color: c.accent),
-                          SizedBox(width: 4),
+                          const SizedBox(width: 4),
                           _MetricChip(
                               value: '${s.humidity.toStringAsFixed(1)}%',
                               color: c.cyan),
@@ -825,8 +1185,7 @@ class _SensorRowState extends State<_SensorRow> {
                         ],
                       ),
 
-                      // ── Переключатель Температура / Влажность ────────────────
-                      SizedBox(height: 10),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           _ChartTab(
@@ -835,7 +1194,7 @@ class _SensorRowState extends State<_SensorRow> {
                             color: c.accent,
                             onTap: () => setState(() => _showTemp = true),
                           ),
-                          SizedBox(width: 6),
+                          const SizedBox(width: 6),
                           _ChartTab(
                             label: 'Влажность',
                             selected: !_showTemp,
@@ -843,7 +1202,6 @@ class _SensorRowState extends State<_SensorRow> {
                             onTap: () => setState(() => _showTemp = false),
                           ),
                           const Spacer(),
-                          // Текущее значение крупно
                           Text(
                             _showTemp
                                 ? '${s.temperature.toStringAsFixed(1)}°C'
@@ -858,15 +1216,15 @@ class _SensorRowState extends State<_SensorRow> {
                         ],
                       ),
 
-                      // ── График (стиль как в отчётах) ────────────────────────
-                      SizedBox(height: 8),
+                      const SizedBox(height: 8),
                       if (!hasChart)
                         Container(
                           height: 80,
                           alignment: Alignment.center,
                           child: Text(
                             'Нет данных за 24 часа',
-                            style: TextStyle(color: c.textDim, fontSize: 12),
+                            style:
+                                TextStyle(color: c.textDim, fontSize: 12),
                           ),
                         )
                       else
@@ -883,9 +1241,8 @@ class _SensorRowState extends State<_SensorRow> {
                           ),
                         ),
 
-                      // ── Статистика (Мин / Среднее / Макс) ───────────────────
                       if (hasChart) ...[
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
                               vertical: 8, horizontal: 4),
@@ -898,19 +1255,22 @@ class _SensorRowState extends State<_SensorRow> {
                             children: [
                               _StatCell(
                                 label: 'Мин',
-                                value: '${chartPoints.reduce((a, b) => a < b ? a : b).toStringAsFixed(1)}$chartUnit',
+                                value:
+                                    '${chartPoints.reduce((a, b) => a < b ? a : b).toStringAsFixed(1)}$chartUnit',
                                 color: c.cyan,
                               ),
                               _VertDiv(),
                               _StatCell(
                                 label: 'Среднее',
-                                value: '${(chartPoints.reduce((a, b) => a + b) / chartPoints.length).toStringAsFixed(1)}$chartUnit',
+                                value:
+                                    '${(chartPoints.reduce((a, b) => a + b) / chartPoints.length).toStringAsFixed(1)}$chartUnit',
                                 color: Colors.white,
                               ),
                               _VertDiv(),
                               _StatCell(
                                 label: 'Макс',
-                                value: '${chartPoints.reduce((a, b) => a > b ? a : b).toStringAsFixed(1)}$chartUnit',
+                                value:
+                                    '${chartPoints.reduce((a, b) => a > b ? a : b).toStringAsFixed(1)}$chartUnit',
                                 color: chartColor,
                               ),
                             ],
@@ -929,7 +1289,6 @@ class _SensorRowState extends State<_SensorRow> {
   }
 }
 
-// Таб переключателя температура/влажность
 class _ChartTab extends StatelessWidget {
   const _ChartTab({
     required this.label,
@@ -971,9 +1330,9 @@ class _ChartTab extends StatelessWidget {
   }
 }
 
-// Ячейка статистики
 class _StatCell extends StatelessWidget {
-  const _StatCell({required this.label, required this.value, required this.color});
+  const _StatCell(
+      {required this.label, required this.value, required this.color});
   final String label;
   final String value;
   final Color color;
@@ -984,7 +1343,7 @@ class _StatCell extends StatelessWidget {
     return Column(
       children: [
         Text(label,
-            style:  TextStyle(
+            style: TextStyle(
               fontSize: 9,
               color: c.textDim,
               letterSpacing: 0.4,
@@ -1065,7 +1424,8 @@ class _AlarmRow extends StatelessWidget {
               Container(width: 4, color: color),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1075,17 +1435,18 @@ class _AlarmRow extends StatelessWidget {
                           children: [
                             Text(
                               alarm.title,
-                              style:  TextStyle(
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                             if (alarm.description.isNotEmpty) ...[
-                              SizedBox(height: 2),
+                              const SizedBox(height: 2),
                               Text(
                                 alarm.description,
-                                style:  TextStyle(fontSize: 11, color: c.textDim),
+                                style: TextStyle(
+                                    fontSize: 11, color: c.textDim),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1095,11 +1456,13 @@ class _AlarmRow extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 3),
                         decoration: BoxDecoration(
                           color: bgColor,
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: color.withOpacity(0.4)),
+                          border:
+                              Border.all(color: color.withOpacity(0.4)),
                         ),
                         child: Text(
                           label,
@@ -1132,7 +1495,6 @@ class _SchemaBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = AppColors.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -1168,11 +1530,13 @@ class _DarkDialog extends StatelessWidget {
       backgroundColor: const Color(0xFF111111),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side:  BorderSide(color: c.border),
+        side: BorderSide(color: c.border),
       ),
       title: Text(title,
-          style:  TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16)),
+          style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 16)),
       content: content,
       actions: actions,
     );
@@ -1189,17 +1553,17 @@ class _DarkField extends StatelessWidget {
     final c = AppColors.of(context);
     return TextField(
       controller: controller,
-      style:  TextStyle(color: Colors.white, fontSize: 14),
+      style: const TextStyle(color: Colors.white, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle:  TextStyle(color: c.textDim, fontSize: 13),
+        labelStyle: TextStyle(color: c.textDim, fontSize: 13),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide:  BorderSide(color: c.border),
+          borderSide: BorderSide(color: c.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide:  BorderSide(color: c.cyan),
+          borderSide: BorderSide(color: c.cyan),
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1217,7 +1581,6 @@ class _OutlineBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = AppColors.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1263,10 +1626,12 @@ class _DarkFilledBtn extends StatelessWidget {
       style: FilledButton.styleFrom(
         backgroundColor: c.cyan,
         foregroundColor: Colors.black,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       onPressed: onTap,
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+      child:
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -1342,16 +1707,19 @@ class _SchemaViewportState extends State<_SchemaViewport> {
                   ),
                 ),
                 ...widget.sensors.map(
-                  (sensor) => Positioned(
-                    left: sensor.x,
-                    top: sensor.y,
-                    child: Tooltip(
-                      message: '${sensor.name}\n'
-                          '${sensor.temperature.toStringAsFixed(1)}°C / '
-                          '${sensor.humidity.toStringAsFixed(1)}%',
-                      child: SensorDot(state: sensor.state),
-                    ),
-                  ),
+                  (sensor) {
+                    final px = sensor.x * width;
+                    final py = sensor.y * height;
+                    return Positioned(
+                      left: px,
+                      top: py,
+                      child: FractionalTranslation(
+                        translation: const Offset(-0.5, -0.5),
+                        child:
+                            SensorDot(state: sensor.state, sensor: sensor),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -1363,9 +1731,6 @@ class _SchemaViewportState extends State<_SchemaViewport> {
 }
 
 // ── Мнемосхема в режиме редактирования ───────────────────────────────────────
-//
-// Ширина = 100% экрана, высота подгоняется по реальному аспекту картинки.
-// Нет InteractiveViewer — жесты не перехватываются.
 
 class _EditableSchema extends StatefulWidget {
   const _EditableSchema({
@@ -1444,6 +1809,8 @@ class _EditableSchemaState extends State<_EditableSchema> {
               ...widget.sensors.map(
                 (s) => _SmoothDraggableDot(
                   sensor: s,
+                  schemaWidth: width,
+                  schemaHeight: height,
                   onPanUpdate: (delta) => widget.onPanUpdate(s, delta),
                 ),
               ),
@@ -1455,17 +1822,18 @@ class _EditableSchemaState extends State<_EditableSchema> {
   }
 }
 
-// ── Датчик с плавным перетаскиванием через onPanUpdate ───────────────────────
-//
-// Использует GestureDetector.onPanUpdate вместо Draggable.onDragEnd —
-// позиция обновляется каждый кадр, без рывков и задержки.
+// ── Датчик с плавным перетаскиванием ─────────────────────────────────────────
 
 class _SmoothDraggableDot extends StatefulWidget {
   const _SmoothDraggableDot({
     required this.sensor,
+    required this.schemaWidth,
+    required this.schemaHeight,
     required this.onPanUpdate,
   });
   final SensorModel sensor;
+  final double schemaWidth;
+  final double schemaHeight;
   final void Function(Offset delta) onPanUpdate;
 
   @override
@@ -1479,43 +1847,40 @@ class _SmoothDraggableDotState extends State<_SmoothDraggableDot> {
   @override
   Widget build(BuildContext context) {
     final c = AppColors.of(context);
-    const dotSize = 18.0; // увеличенная зона касания в режиме редактирования
+    // Используем меньший размер карточки т.к. SensorDot стал компактнее
+    const cardW = 62.0;
+    const cardH = 36.0;
+
+    final px = widget.sensor.x * widget.schemaWidth - cardW / 2;
+    final py = widget.sensor.y * widget.schemaHeight - cardH / 2;
 
     return Positioned(
-      left: widget.sensor.x - dotSize / 2,
-      top: widget.sensor.y - dotSize / 2,
+      left: px.clamp(0.0, widget.schemaWidth - cardW),
+      top:  py.clamp(0.0, widget.schemaHeight - cardH),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanStart: (_) => setState(() => _dragging = true),
         onPanUpdate: (d) => widget.onPanUpdate(d.delta),
         onPanEnd: (_) => setState(() => _dragging = false),
-        child: SizedBox(
-          width: dotSize,
-          height: dotSize,
-          child: Center(
-            child: AnimatedScale(
-              scale: _dragging ? 1.6 : 1.0,
-              duration: const Duration(milliseconds: 120),
-              curve: Curves.easeOut,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Пульсирующий ореол в режиме перетаскивания
-                  if (_dragging)
-                    Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _stateColor(widget.sensor.state)
-                            .withOpacity(0.25),
-                      ),
+        child: AnimatedScale(
+          scale: _dragging ? 1.05 : 1.0,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              if (_dragging)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(7),
+                      color:
+                          _stateColor(widget.sensor.state).withOpacity(0.15),
                     ),
-                  // Сама точка датчика
-                  SensorDot(state: widget.sensor.state),
-                ],
-              ),
-            ),
+                  ),
+                ),
+              SensorDot(state: widget.sensor.state, sensor: widget.sensor),
+            ],
           ),
         ),
       ),

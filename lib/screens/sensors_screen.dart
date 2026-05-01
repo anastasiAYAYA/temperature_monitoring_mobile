@@ -876,18 +876,22 @@ class _SensorDetailDialogState extends State<_SensorDetailDialog> {
           const _SectionLabel(text: 'ПОРОГИ ТЕМПЕРАТУРЫ (°C)'),
           const SizedBox(height: 8),
           _ThresholdRow(label: 'Внимание', color: _kOrange,
-              minCtrl: _wMinTCtrl, maxCtrl: _wMaxTCtrl, signed: true),
+              minCtrl: _wMinTCtrl, maxCtrl: _wMaxTCtrl, signed: true,
+              readOnly: !canEdit),
           const SizedBox(height: 6),
           _ThresholdRow(label: 'Тревога', color: _kRed,
-              minCtrl: _aMinTCtrl, maxCtrl: _aMaxTCtrl, signed: true),
+              minCtrl: _aMinTCtrl, maxCtrl: _aMaxTCtrl, signed: true,
+              readOnly: !canEdit),
           const SizedBox(height: 20),
           const _SectionLabel(text: 'ПОРОГИ ВЛАЖНОСТИ (%)'),
           const SizedBox(height: 8),
           _ThresholdRow(label: 'Внимание', color: _kOrange,
-              minCtrl: _wMinHCtrl, maxCtrl: _wMaxHCtrl),
+              minCtrl: _wMinHCtrl, maxCtrl: _wMaxHCtrl,
+              readOnly: !canEdit),
           const SizedBox(height: 6),
           _ThresholdRow(label: 'Тревога', color: _kRed,
-              minCtrl: _aMinHCtrl, maxCtrl: _aMaxHCtrl),
+              minCtrl: _aMinHCtrl, maxCtrl: _aMaxHCtrl,
+              readOnly: !canEdit),
           const SizedBox(height: 4),
         ],
       ),
@@ -954,7 +958,8 @@ class _LocationGroup extends StatefulWidget {
 }
 
 class _LocationGroupState extends State<_LocationGroup> {
-  bool _expanded = true;
+  // По умолчанию свёрнуто — датчики скрыты при входе на экран
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1942,12 +1947,14 @@ class _ThresholdRow extends StatelessWidget {
     required this.minCtrl,
     required this.maxCtrl,
     this.signed = false,
+    this.readOnly = false,
   });
   final String label;
   final Color color;
   final TextEditingController minCtrl;
   final TextEditingController maxCtrl;
   final bool signed;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -1979,6 +1986,7 @@ class _ThresholdRow extends StatelessWidget {
             label: 'Min',
             keyboardType: TextInputType.numberWithOptions(
                 decimal: true, signed: signed),
+            readOnly: readOnly,
           ),
         ),
         const SizedBox(width: 6),
@@ -1988,6 +1996,7 @@ class _ThresholdRow extends StatelessWidget {
             label: 'Max',
             keyboardType: TextInputType.numberWithOptions(
                 decimal: true, signed: signed),
+            readOnly: readOnly,
           ),
         ),
       ],
@@ -2096,30 +2105,42 @@ class _DarkField extends StatelessWidget {
     required this.label,
     this.hint,
     this.keyboardType,
+    this.readOnly = false,
   });
   final TextEditingController controller;
   final String label;
   final String? hint;
   final TextInputType? keyboardType;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
+      readOnly: readOnly,
+      style: TextStyle(
+        color: readOnly ? _kTextDim : Colors.white,
+        fontSize: 14,
+      ),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         labelStyle: const TextStyle(color: _kTextDim, fontSize: 13),
         hintStyle: const TextStyle(color: _kTextDim, fontSize: 12),
+        filled: readOnly,
+        fillColor: readOnly ? const Color(0xFF0A1516) : null,
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _kBorder),
+          borderSide: BorderSide(
+            color: readOnly ? _kBorder.withOpacity(0.5) : _kBorder,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _kCyan),
+          borderSide: BorderSide(
+            color: readOnly ? _kBorder.withOpacity(0.5) : _kCyan,
+          ),
         ),
         isDense: true,
         contentPadding:

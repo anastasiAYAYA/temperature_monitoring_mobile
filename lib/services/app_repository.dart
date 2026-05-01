@@ -8,6 +8,7 @@ import 'package:http_parser/http_parser.dart';
 
 import '../models/alarm_model.dart';
 import '../models/audit_entry.dart';
+import '../models/location_details.dart';
 import '../models/location_model.dart';
 import '../models/sensor_model.dart';
 import '../models/user_role.dart';
@@ -232,6 +233,29 @@ class AppRepository {
     await loadSubordinates();
     await loadAuditLog();
     return null;
+  }
+
+  // ── GET /locations/{group_id}/details (только admin) ─────────────────────
+  /// Возвращает локацию + пользователей + audit_logs одним запросом.
+  Future<LocationDetailsResult> loadLocationDetails(
+    int locationId, {
+    int usersLimit = 100,
+    int logsLimit  = 200,
+  }) async {
+    try {
+      final r = await get(
+        '/locations/$locationId/details?users_limit=$usersLimit&logs_limit=$logsLimit',
+      );
+      if (r.statusCode == 200) {
+        final json = jsonDecode(r.body) as Map<String, dynamic>;
+        return LocationDetailsResult(data: LocationDetails.fromJson(json));
+      }
+      final msg = parseError(r.body) ??
+          (r.statusCode == 404 ? 'Локация не найдена' : 'Ошибка ${r.statusCode}');
+      return LocationDetailsResult(error: msg);
+    } catch (e) {
+      return LocationDetailsResult(error: 'Сервер недоступен: $e');
+    }
   }
 
   Future<void> loadSubordinates() async {
@@ -894,8 +918,8 @@ class AppRepository {
       temperature:         0.0,
       humidity:            0.0,
       state:               state,
-      x:                   (j['pos_x'] as num?)?.toDouble() ?? 10.0,
-      y:                   (j['pos_y'] as num?)?.toDouble() ?? 10.0,
+      x:                   _normalizePos((j['pos_x'] as num?)?.toDouble() ?? 0.1),
+      y:                   _normalizePos((j['pos_y'] as num?)?.toDouble() ?? 0.1),
       points:              [],
       humidityPoints:      [],
       controlUnitId:       (j['control_unit_id']     as num?)?.toInt(),
@@ -915,6 +939,11 @@ class AppRepository {
     sensor.alarmMaxHum    = _thresh(j['alarm_max_hum']);
     return sensor;
   }
+
+  /// Нормализует позицию датчика в диапазон 0.0–1.0.
+  /// Если значение > 1.0 — это устаревшее абсолютное значение в пикселях,
+  /// которое зажимаем до 0.5 (центр), чтобы датчик был виден.
+  double _normalizePos(double v) => v <= 1.0 ? v.clamp(0.0, 1.0) : 0.5;
 
   /// Парсит порог из JSON.
   /// null → не задан. Любое число включая 0.0 → валидное значение.

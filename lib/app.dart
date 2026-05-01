@@ -72,11 +72,26 @@ class _RootPageState extends State<RootPage> {
     });
   }
 
+  /// Вызывается после успешного логина — загружает данные и сбрасывает таб на главную
+  Future<void> _onLoginSuccess() async {
+    setState(() {
+      tab = 0; // всегда на главную после входа
+      loading = true;
+      error = null;
+    });
+    final err = await repo.loadAll();
+    if (!mounted) return;
+    setState(() {
+      loading = false;
+      error = err;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // Не авторизован — показываем логин
     if (repo.token == null) {
-      return LoginScreen(repo: repo, onSuccess: _reload);
+      return LoginScreen(repo: repo, onSuccess: _onLoginSuccess);
     }
 
     final screens = [
@@ -87,26 +102,24 @@ class _RootPageState extends State<RootPage> {
       SettingsScreen(
         repo: repo,
         onRefresh: _reload,
-        onLogout: () => setState(() {}),
+        onLogout: () => setState(() { tab = 0; }),
         onToggleTheme: widget.onToggleTheme,
       ),
     ];
 
-    // Цвет навбара и AppBar зависит от темы
-    final isDark = widget.isDark;
-    final navBg  = isDark ? const Color(0xFF0E0E0E) : Colors.white;
+    final isDark   = widget.isDark;
+    final navBg    = isDark ? const Color(0xFF0E0E0E) : Colors.white;
     final appBarBg = isDark ? const Color(0xFF0A0A0A) : Colors.white;
-    final textColor = isDark ? Colors.white : const Color(0xFF0D1B2A);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F6),
       appBar: AppBar(
         backgroundColor: appBarBg,
         elevation: 0,
-        title: Text(
+        title: const Text(
           'TEMPERATURA.KZ',
           style: TextStyle(
-            color: const Color(0xFFFFD550),
+            color: Color(0xFFFFD550),
             fontWeight: FontWeight.w700,
             fontSize: 16,
             letterSpacing: 0.5,
@@ -123,7 +136,7 @@ class _RootPageState extends State<RootPage> {
                 ? null
                 : () async {
                     repo.logout();
-                    setState(() {});
+                    setState(() { tab = 0; });
                   },
             icon: const Icon(Icons.logout, color: Color(0xFFFF5252)),
           ),
