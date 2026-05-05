@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
 
-/// Акцентные цвета — одинаковы в тёмной и светлой теме
+// Акцентные цвета, одинаковы в тёмной и светлой теме
 const kAccent = Color(0xFFFFD550); // жёлтый
 const kCyan   = Color(0xFF07BCD4); // голубой
 const kGreen  = Color(0xFF01E676); // зелёный
@@ -9,27 +9,27 @@ const kRed    = Color(0xFFFF5252); // красный
 const kOrange  = Color(0xFFFFB300); // оранжевый
 const kTextDim = Color(0xFF7A8A8E); // приглушённый (тёмная тема)
 
-/// Статические константы для обратной совместимости
-/// (sensor_dot, login_screen и др. используют AppColors.primary и т.д.)
-class AppColors {
-  AppColors._();
+// Статические константы для обратной совместимости
+// (sensor_dot, login_screen и др. используют AppColors.primary и т.д.)
+class AppColors { // класс для получения цветов в зависимости от темы
+  AppColors._(); // конструктор класса
 
-  static const primary  = kAccent;
-  static const danger   = kRed;
-  static const success  = kGreen;
-  static const info     = kCyan;
-  static const warning  = kOrange;
+  static const primary  = kAccent; // жёлтый
+  static const danger   = kRed; // красный
+  static const success  = kGreen; // зелёный
+  static const info     = kCyan; // голубой
+  static const warning  = kOrange; // оранжевый
 
-  /// Динамические цвета текущей темы.
-  /// Использование: `final c = AppColors.of(context);`
+  // Динамические цвета текущей темы
+  // Использование: final c = AppColors.of(context); - получение цветов в зависимости от темы
   static AppScheme of(BuildContext context) {
-    final p = AppThemeProvider.maybeOf(context);
-    return (p?.isDark ?? true) ? const AppScheme.dark() : const AppScheme.light();
+    final p = AppThemeProvider.maybeOf(context); // получение темы из контекста
+    return (p?.isDark ?? true) ? const AppScheme.dark() : const AppScheme.light(); // если темная тема, то тёмная тема, иначе светлая тема
   }
 }
 
-class AppScheme {
-  const AppScheme.dark()
+class AppScheme { // класс для получения цветов в зависимости от темы
+  const AppScheme.dark() // конструктор класса для тёмной темы
       : bg       = const Color(0xFF0A0A0A),
         card     = const Color(0x4D323232),
         card2    = const Color(0x334B4B4B),
@@ -67,10 +67,10 @@ class AppScheme {
   final Color greenBg;
   final bool isDark;
 
-  // Акценты — одинаковы в обеих темах
-  Color get accent => kAccent;
-  Color get cyan   => kCyan;
-  Color get green  => kGreen;
-  Color get red    => kRed;
-  Color get orange => kOrange;
+  // Акценты, одинаковы в обеих темах
+  Color get accent => kAccent; // жёлтый
+  Color get cyan   => kCyan; // голубой
+  Color get green  => kGreen; // зелёный
+  Color get red    => kRed; // красный
+  Color get orange => kOrange; // оранжевый
 }

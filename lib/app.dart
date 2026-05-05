@@ -9,30 +9,30 @@ import 'screens/settings_screen.dart';
 import 'services/app_repository.dart';
 import 'theme/app_theme.dart';
 
-class TemperaturaApp extends StatefulWidget {
-  const TemperaturaApp({super.key});
+class TemperaturaApp extends StatefulWidget { // класс для приложения
+  const TemperaturaApp({super.key}); // конструктор класса
 
   @override
-  State<TemperaturaApp> createState() => _TemperaturaAppState();
+  State<TemperaturaApp> createState() => _TemperaturaAppState(); // создание экземпляра класса
 }
 
-class _TemperaturaAppState extends State<TemperaturaApp> {
+class _TemperaturaAppState extends State<TemperaturaApp> { // класс для состояния приложения
   bool _isDark = true;
 
-  void _toggleTheme() => setState(() => _isDark = !_isDark);
+  void _toggleTheme() => setState(() => _isDark = !_isDark); // функция для переключения темы
 
   @override
-  Widget build(BuildContext context) {
-    return AppThemeProvider(
+  Widget build(BuildContext context) { // функция для построения приложения
+    return AppThemeProvider( // класс для построения приложения
       isDark: _isDark,
       toggle: _toggleTheme,
-      child: MaterialApp(
+      child: MaterialApp( // класс для построения приложения
         debugShowCheckedModeBanner: false,
-        title: 'TEMPERATURA.KZ',
+        title: 'TEMPERATURA.KZ', // название приложения
         theme: buildMaterialTheme(isDark: _isDark),
-        home: RootPage(
-          isDark: _isDark,
-          onToggleTheme: _toggleTheme,
+        home: RootPage( // класс для построения приложения
+          isDark: _isDark, // признак темной темы
+          onToggleTheme: _toggleTheme, // функция для переключения темы
         ),
       ),
     );
@@ -41,50 +41,37 @@ class _TemperaturaAppState extends State<TemperaturaApp> {
 
 class RootPage extends StatefulWidget {
   const RootPage({
-    super.key,
-    required this.isDark,
-    required this.onToggleTheme,
+    super.key, // конструктор класса
+    required this.isDark, // признак темной темы
+    required this.onToggleTheme, // функция для переключения темы
   });
 
-  final bool isDark;
-  final VoidCallback onToggleTheme;
+  final bool isDark; // признак темной темы
+  final VoidCallback onToggleTheme; // функция для переключения темы
 
   @override
-  State<RootPage> createState() => _RootPageState();
+  State<RootPage> createState() => _RootPageState(); // создание экземпляра класса
 }
 
-class _RootPageState extends State<RootPage> {
-  final repo = AppRepository();
+class _RootPageState extends State<RootPage> { // класс для состояния приложения
+  final repo = AppRepository(); // репозиторий
   int tab = 0;
-  bool loading = false;
-  String? error;
+  bool loading = false; // признак загрузки
+  String? error; // ошибка
 
-  Future<void> _reload() async {
-    setState(() {
-      loading = true;
-      error = null;
-    });
-    final err = await repo.loadAll();
-    if (!mounted) return;
-    setState(() {
-      loading = false;
-      error = err;
-    });
+  Future<void> _reload() async { // функция для перезагрузки данных
+    setState(() { loading = true; error = null; }); // устанавливаем признак загрузки и ошибку
+    final err = await repo.loadAll(); // загружаем данные
+    if (!mounted) return; // если приложение не смонтировано, то выходим
+    setState(() { loading = false; error = err; }); // устанавливаем признак загрузки и ошибку
   }
 
-  /// Вызывается после успешного логина — загружает данные и сбрасывает таб на главную
-  Future<void> _onLoginSuccess() async {
-    setState(() {
-      tab = 0; // всегда на главную после входа
-      loading = true;
-      error = null;
-    });
-    final err = await repo.loadAll();
-    if (!mounted) return;
-    setState(() {
-      loading = false;
-      error = err;
-    });
+  // Вызывается после успешного логина: загружает данные и сбрасывает таб на главную
+  Future<void> _onLoginSuccess() async { // функция для вызова после успешного логина
+    setState(() { tab = 0; loading = true; error = null; }); // устанавливаем таб на главную и признак загрузки
+    final err = await repo.loadAll(); // загружаем данные
+    if (!mounted) return; // если приложение не смонтировано, то выходим
+    setState(() { loading = false; error = err; }); // устанавливаем признак загрузки и ошибку
   }
 
   @override
@@ -94,27 +81,27 @@ class _RootPageState extends State<RootPage> {
       return LoginScreen(repo: repo, onSuccess: _onLoginSuccess);
     }
 
-    final screens = [
-      DashboardScreen(repo: repo, onRefresh: _reload),
-      SensorsScreen(repo: repo, onRefresh: _reload),
-      ReportsScreen(repo: repo),
-      NotificationsScreen(repo: repo, onRefresh: _reload),
-      SettingsScreen(
-        repo: repo,
-        onRefresh: _reload,
-        onLogout: () => setState(() { tab = 0; }),
-        onToggleTheme: widget.onToggleTheme,
+    final screens = [ // экраны
+      DashboardScreen(repo: repo, onRefresh: _reload), // экран главная
+      SensorsScreen(repo: repo, onRefresh: _reload), // экран датчики
+      ReportsScreen(repo: repo), // экран отчеты
+      NotificationsScreen(repo: repo, onRefresh: _reload), // экран уведомления
+      SettingsScreen( // экран настройки
+        repo: repo, // репозиторий
+        onRefresh: _reload, // функция для перезагрузки данных
+        onLogout: () => setState(() { tab = 0; }), // функция для выхода
+        onToggleTheme: widget.onToggleTheme, // функция для переключения темы
       ),
     ];
 
-    final isDark   = widget.isDark;
-    final navBg    = isDark ? const Color(0xFF0E0E0E) : Colors.white;
-    final appBarBg = isDark ? const Color(0xFF0A0A0A) : Colors.white;
+    final isDark   = widget.isDark; // признак темной темы
+    final navBg    = isDark ? const Color(0xFF0E0E0E) : Colors.white; // цвет фона навигации
+    final appBarBg = isDark ? const Color(0xFF0A0A0A) : Colors.white; // цвет фона AppBar
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F6),
+      backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F6), // цвет фона
       appBar: AppBar(
-        backgroundColor: appBarBg,
+        backgroundColor: appBarBg, // цвет фона AppBar
         elevation: 0,
         title: const Text(
           'TEMPERATURA.KZ',
@@ -125,20 +112,20 @@ class _RootPageState extends State<RootPage> {
             letterSpacing: 0.5,
           ),
         ),
-        actions: [
+        actions: [ // действия
           IconButton(
-            onPressed: loading ? null : _reload,
-            icon: Icon(Icons.refresh,
-                color: isDark ? Colors.white54 : Colors.black54),
+            onPressed: loading ? null : _reload, // функция для перезагрузки данных
+            icon: Icon(Icons.refresh, // иконка для перезагрузки данных
+                color: isDark ? Colors.white54 : Colors.black54), // цвет иконки
           ),
           IconButton(
             onPressed: loading
                 ? null
-                : () async {
-                    repo.logout();
-                    setState(() { tab = 0; });
+                : () async { // функция для выхода
+                    repo.logout(); // выход
+                    setState(() { tab = 0; }); // устанавливаем таб на главную
                   },
-            icon: const Icon(Icons.logout, color: Color(0xFFFF5252)),
+            icon: const Icon(Icons.logout, color: Color(0xFFFF5252)), // иконка для выхода
           ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -157,7 +144,7 @@ class _RootPageState extends State<RootPage> {
       ),
       body: loading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFFFD550)))
+              child: CircularProgressIndicator(color: Color(0xFFFFD550))) // индикатор загрузки
           : Column(
               children: [
                 if (error != null)
@@ -167,7 +154,7 @@ class _RootPageState extends State<RootPage> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 8),
                     child: Text(
-                      error!,
+                      error!, // ошибка
                       style: const TextStyle(
                           color: Color(0xFFFF5252), fontSize: 13),
                     ),
@@ -175,42 +162,42 @@ class _RootPageState extends State<RootPage> {
                 Expanded(child: screens[tab]),
               ],
             ),
-      bottomNavigationBar: NavigationBar(
-        backgroundColor: navBg,
+      bottomNavigationBar: NavigationBar( // навигация
+        backgroundColor: navBg, // цвет фона навигации
         surfaceTintColor: Colors.transparent,
-        indicatorColor: const Color(0xFFFFD550).withOpacity(0.18),
+        indicatorColor: const Color(0xFFFFD550).withOpacity(0.18), // цвет индикатора
         selectedIndex: tab,
-        onDestinationSelected: (v) => setState(() => tab = v),
+        onDestinationSelected: (v) => setState(() => tab = v), // функция для выбора пункта навигации
         destinations: [
           NavigationDestination(
-            icon: Icon(Icons.home_outlined,
+            icon: Icon(Icons.home_outlined, // иконка для главного экрана
                 color: isDark ? Colors.white38 : Colors.black38),
             selectedIcon: const Icon(Icons.home, color: Color(0xFFFFD550)),
             label: 'Главная',
           ),
           NavigationDestination(
-            icon: Icon(Icons.sensors_outlined,
+            icon: Icon(Icons.sensors_outlined, // иконка для экрана датчиков
                 color: isDark ? Colors.white38 : Colors.black38),
             selectedIcon:
                 const Icon(Icons.sensors, color: Color(0xFFFFD550)),
             label: 'Датчики',
           ),
           NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined,
+            icon: Icon(Icons.bar_chart_outlined, // иконка для экрана отчетов
                 color: isDark ? Colors.white38 : Colors.black38),
             selectedIcon:
                 const Icon(Icons.bar_chart, color: Color(0xFFFFD550)),
             label: 'Отчёты',
           ),
           NavigationDestination(
-            icon: Icon(Icons.notifications_outlined,
+            icon: Icon(Icons.notifications_outlined, // иконка для экрана уведомлений
                 color: isDark ? Colors.white38 : Colors.black38),
             selectedIcon: const Icon(Icons.notifications,
                 color: Color(0xFFFFD550)),
             label: 'Увед.',
           ),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined,
+            icon: Icon(Icons.settings_outlined, // иконка для экрана настроек
                 color: isDark ? Colors.white38 : Colors.black38),
             selectedIcon:
                 const Icon(Icons.settings, color: Color(0xFFFFD550)),

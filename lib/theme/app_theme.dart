@@ -36,10 +36,10 @@ class _LightPalette {
 }
 
 // ── AppColors — текущие цвета в зависимости от темы ──────────────────────────
-class AppColors {
-  const AppColors._({required this.isDark});
+class AppColors { // класс для получения цветов в зависимости от темы
+  const AppColors._({required this.isDark}); // конструктор класса
 
-  final bool isDark;
+  final bool isDark; // признак темной темы
 
   Color get bg       => isDark ? _DarkPalette.bg       : _LightPalette.bg;
   Color get card     => isDark ? _DarkPalette.card     : _LightPalette.card;
@@ -53,48 +53,39 @@ class AppColors {
   Color get surface  => isDark ? _DarkPalette.surface  : _LightPalette.surface;
 
   // Акценты одинаковы
-  Color get accent => kAccent;
-  Color get cyan   => kCyan;
-  Color get green  => kGreen;
-  Color get red    => kRed;
-  Color get orange => kOrange;
+  Color get accent => kAccent; // жёлтый
+  Color get cyan   => kCyan; // голубой
+  Color get green  => kGreen; // зелёный
+  Color get red    => kRed; // красный
+  Color get orange => kOrange; // оранжевый
 
-  static const AppColors dark  = AppColors._(isDark: true);
-  static const AppColors light = AppColors._(isDark: false);
+  static const AppColors dark  = AppColors._(isDark: true); // тёмная тема
+  static const AppColors light = AppColors._(isDark: false); // светлая тема
 }
 
 // ── InheritedWidget — провайдер темы ─────────────────────────────────────────
-class AppThemeProvider extends InheritedWidget {
+class AppThemeProvider extends InheritedWidget { // класс для получения цветов в зависимости от темы
   const AppThemeProvider({
-    super.key,
-    required this.isDark,
-    required this.toggle,
-    required super.child,
+    super.key, // ключ для идентификации
+    required this.isDark, // признак темной темы
+    required this.toggle, // функция для переключения темы
+    required super.child, // child - дочерний виджет
   });
 
-  final bool isDark;
-  final VoidCallback toggle;
+  final bool isDark; // признак темной темы
+  final VoidCallback toggle; // функция для переключения темы
 
-  AppColors get colors => isDark ? AppColors.dark : AppColors.light;
+  AppColors get colors => isDark ? AppColors.dark : AppColors.light; // получение цветов в зависимости от темы
 
-  static AppThemeProvider of(BuildContext context) {
-    final result =
-        context.dependOnInheritedWidgetOfExactType<AppThemeProvider>();
-    assert(result != null, 'AppThemeProvider not found in widget tree');
-    return result!;
-  }
-
-  /// Безопасная версия — не падает если провайдер не найден (возвращает тёмную)
-  static AppThemeProvider? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<AppThemeProvider>();
+  static AppThemeProvider of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<AppThemeProvider>()!; // получение провайдера темы из контекста
 
   @override
-  bool updateShouldNotify(AppThemeProvider old) => old.isDark != isDark;
+  bool updateShouldNotify(AppThemeProvider old) => old.isDark != isDark; // обновление при изменении признака темной темы
 }
 
 // ── MaterialTheme по режиму ───────────────────────────────────────────────────
-ThemeData buildMaterialTheme({required bool isDark}) {
-  if (isDark) {
+ThemeData buildMaterialTheme({required bool isDark}) { // функция для построения темы Material
+  if (isDark) { // если темная тема
     return ThemeData.dark().copyWith(
       scaffoldBackgroundColor: _DarkPalette.bg,
       colorScheme: const ColorScheme.dark(
@@ -103,13 +94,13 @@ ThemeData buildMaterialTheme({required bool isDark}) {
         surface: _DarkPalette.surface,        // тёмный — фон диалогов
         onSurface: Colors.white,              // белый — текст в диалогах
       ),
-      dividerColor: _DarkPalette.border,
-      snackBarTheme: const SnackBarThemeData(
-        backgroundColor: Color(0xFF1E1E1E),
-        contentTextStyle: TextStyle(color: Colors.white),
+      dividerColor: _DarkPalette.border, // тёмно-серый разделитель 
+      snackBarTheme: const SnackBarThemeData( // тёмная тема
+        backgroundColor: Color(0xFF1E1E1E), // тёмно-серый фон
+        contentTextStyle: TextStyle(color: Colors.white), // белый текст
       ),
     );
-  } else {
+  } else { // если светлая тема
     return ThemeData.light().copyWith(
       scaffoldBackgroundColor: _LightPalette.bg,
       colorScheme: const ColorScheme.light(
