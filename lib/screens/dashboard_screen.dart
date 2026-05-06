@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
-
-import '../theme/app_colors.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../models/alarm_model.dart';
 import '../models/sensor_model.dart';
 import '../models/user_role.dart';
 import '../services/app_repository.dart';
+import '../theme/app_colors.dart';
 import '../widgets/line_chart.dart';
 import '../widgets/sensor_dot.dart';
 
-
+/// Координаты датчиков на плане хранятся как **доли ширины/высоты** (0…1) и переводятся
+/// в пиксели умножением на размер области схемы — см. [_SchemaViewport], [_onSensorPanUpdate].
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen(
       {super.key, required this.repo, required this.onRefresh});
+
   final AppRepository repo;
+  /// Вызывается после создания локации / загрузки плана — перезагружает кеш в родителе.
   final Future<void> Function() onRefresh;
 
   @override
@@ -23,12 +25,22 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   AppScheme get c => AppColors.of(context);
+
+  /// Индекс выбранной локации в [AppRepository.locations] (для editor/viewer).
   int _selectedLocationIndex = 0;
+
+  /// Для admin: id выбранной компании; `null` — показан список компаний с поиском.
   int? _adminSelectedLocationId;
+
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
+
+  /// Привязка к области мнемосхемы: нужна, чтобы переводить drag из пикселей в 0…1.
   final GlobalKey _schemaKey = GlobalKey();
+
   final TransformationController _transformCtrl = TransformationController();
+
+  /// Режим перетаскивания датчиков; позиции до «Сохранить» можно откатить через [_draftPositions].
   bool _editMode = false;
   final Map<int, (double, double)> _draftPositions = {};
 
@@ -44,9 +56,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    // Sparkline строится из repo.loadHistory — вызываем после первого кадра, когда контекст готов.
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadCharts());
   }
 
+  /// Подгружает историю периода «День» для всех датчиков текущей локации (точки в [AppRepository]).
   Future<void> _loadCharts() async {
     final sensors = _sensorsForCurrentLocation;
     for (final s in sensors) {
@@ -55,6 +69,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) setState(() {});
   }
 
+  /// Диалог: POST локации (multipart `name`), затем опционально `uploadLocationPlan` для последней созданной.
   Future<void> _showCreateLocationDialog() async {
     final nameCtrl = TextEditingController();
     PlatformFile? pickedFile;
@@ -224,6 +239,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// MIME для multipart загрузки плана (сервер ориентируется на Content-Type части).
   String _mimeType(String path) {
     final l = path.toLowerCase();
     if (l.endsWith('.png')) return 'image/png';
@@ -231,6 +247,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return 'image/jpeg';
   }
 
+  /// Датчики выбранной локации: сопоставление по `SensorModel.groupId` и id локации из репозитория.
   List<SensorModel> get _sensorsForCurrentLocation {
     if (_isAdmin) {
       if (_adminSelectedLocationId == null) return [];
@@ -243,6 +260,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return widget.repo.sensors.where((s) => s.groupId == id).toList();
   }
 
+  /// Перевод смещения пальца/мыши из пикселей в приращение нормализованных координат.
   void _onSensorPanUpdate(SensorModel sensor, Offset delta) {
     final box = _schemaKey.currentContext?.findRenderObject() as RenderBox?;
     final schemaW = box?.size.width ?? 300.0;
@@ -277,6 +295,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  /// PATCH координат только для датчиков, сдвинутых заметно относительно снимка [_draftPositions].
   Future<void> _confirmEditMode() async {
     final changed = widget.repo.sensors.where((s) {
       final orig = _draftPositions[s.id];
@@ -303,6 +322,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ));
   }
 
+  /// API может вернуть относительный `image_url` — склеиваем с origin без суффикса `/api/v1`.
   String _resolveImageUrl(String imageUrl, String baseUrl) {
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) return imageUrl;
     return '${baseUrl.replaceAll(RegExp(r'/api/v\d+$'), '')}$imageUrl';
@@ -332,6 +352,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return _isAdmin ? _buildAdminView(c) : _buildUserView(c);
   }
 
+  /// Admin: поиск и алфавитный список компаний → по тапу [_buildCompanyContent].
   Widget _buildAdminView(AppScheme c) {
     final locations = widget.repo.locations;
     final filtered = _searchQuery.isEmpty
@@ -450,6 +471,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildCompanyContent(AppScheme c, dynamic currentLocation) {
     final sensors = _sensorsForCurrentLocation;
+    // Внимание на защите: сейчас берутся первые 5 тревог из общего списка репозитория без фильтра по компании.
     final alarms = widget.repo.alarms.take(5).toList();
 
     return Container(
@@ -494,6 +516,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final locations = widget.repo.locations;
     final currentLocation = locations.isNotEmpty ? locations[_selectedLocationIndex] : null;
     final sensors = _sensorsForCurrentLocation;
+    // См. комментарий в [_buildCompanyContent] — тот же список последних тревог глобально.
     final alarms = widget.repo.alarms.take(5).toList();
 
     return Container(
@@ -546,6 +569,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Карточка мнемосхемы: просмотр с [InteractiveViewer] или редактирование [_EditableSchema].
   Widget _buildSchemaCard(AppScheme c, dynamic currentLocation, List<SensorModel> sensors, {required bool canManage}) {
     return Container(
       decoration: BoxDecoration(
@@ -1086,6 +1110,7 @@ class _AppFilledBtn extends StatelessWidget {
 
 // ── Режим просмотра схемы ─────────────────────────────────────────────────────
 
+/// План с зумом/панорамированием; точки датчиков — [Positioned] через `x,y` в долях размера изображения.
 class _SchemaViewport extends StatefulWidget {
   const _SchemaViewport({super.key, required this.imageUrl, required this.sensors, required this.transformCtrl, required this.textDim, required this.isDark});
   final String imageUrl;
@@ -1147,6 +1172,7 @@ class _SchemaViewportState extends State<_SchemaViewport> {
 
 // ── Мнемосхема в режиме редактирования ───────────────────────────────────────
 
+/// Режим редактирования: без InteractiveViewer, координаты обновляются жестами [_SmoothDraggableDot].
 class _EditableSchema extends StatefulWidget {
   const _EditableSchema({super.key, required this.imageUrl, required this.sensors, required this.onPanUpdate});
   final String? imageUrl;

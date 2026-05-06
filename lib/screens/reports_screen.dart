@@ -1,25 +1,13 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html show AnchorElement, Blob, Url;
 
 import '../models/sensor_model.dart';
 import '../services/app_repository.dart';
+import '../theme/app_colors.dart';
 import '../widgets/line_chart.dart';
-
-// ── Фирменная палитра ─────────────────────────────────────────────────────────
-const _kBg       = Color(0xFF0A0A0A);
-const _kCard     = Color(0x4D323232);
-const _kCard2    = Color(0x334B4B4B);
-const _kBorder   = Color(0xFF19282B);
-const _kAccent   = Color(0xFFFFD550);   // жёлтый
-const _kCyan     = Color(0xFF07BCD4);   // голубой
-const _kGreen    = Color(0xFF01E676);   // зелёный
-const _kRed      = Color(0xFFFF5252);   // красный
-const _kYellowBg = Color(0xFF312C1C);
-const _kTextDim  = Color(0xFF7A8A8E);
 
 // ── Точка телеметрии ──────────────────────────────────────────────────────────
 
@@ -64,10 +52,14 @@ const Map<String, int> _kHistoryLimit = {
 
 enum _ReportTarget { sensor, location }
 
-// ── Экран ─────────────────────────────────────────────────────────────────────
-
+/// Отчёты и превью: история через `GET .../telemetry/{id}/history?limit=...` (см. [_fetchSensorPoints]),
+/// файл — `downloadReportByPeriod` / `downloadLocationReportByPeriod`. На web скачивание через `dart:html`.
+///
+/// Режим «локация»: для каждого датчика группы запрашивается история, затем покомпонентное усреднение
+/// по минимальной длине рядов ([_loadLocationChart]) — упрощённая агрегация для дипломного прототипа.
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key, required this.repo});
+
   final AppRepository repo;
 
   @override
@@ -218,7 +210,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: ColorScheme.dark(
-            primary: _kCyan,
+            primary: AppColors.of(context).cyan,
             surface: Theme.of(context).colorScheme.surface,
           ),
         ),
@@ -265,8 +257,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
     try {
       // На вебе скачиваем через браузер
       final blob = html.Blob([bytes]);
-      final url  = html.Url.createObjectUrlFromBlob(blob);
-      final a    = html.AnchorElement(href: url)
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: url)
         ..setAttribute('download', fileName)
         ..click();
       html.Url.revokeObjectUrl(url);
@@ -307,19 +299,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     final sensors   = widget.repo.sensors;
     final locations = widget.repo.locations;
 
     return Container(
-      color: _kBg,
+      color: c.bg,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
         children: [
           // ── Заголовок ────────────────────────────────────────────────────────
-          const Text(
+          Text(
             'Аналитика и архив',
             style: TextStyle(
-              color: Colors.white,
+              color: c.textMain,
               fontSize: 20,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.2,
@@ -412,10 +405,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         duration: const Duration(milliseconds: 150),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: selected ? _kYellowBg : Colors.transparent,
+                          color: selected ? AppColors.of(context).yellowBg : Colors.transparent,
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                            color: selected ? _kAccent.withOpacity(0.7) : _kBorder,
+                            color: selected ? AppColors.of(context).accent.withOpacity(0.7) : AppColors.of(context).border,
                           ),
                         ),
                         child: Text(
@@ -423,7 +416,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-                            color: selected ? _kAccent : _kTextDim,
+                            color: selected ? AppColors.of(context).accent : AppColors.of(context).textDim,
                           ),
                         ),
                       ),
@@ -458,13 +451,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                           decoration: BoxDecoration(
                             color: (_startDate != null && _endDate != null)
-                                ? _kCyan.withOpacity(0.12)
+                                ? AppColors.of(context).cyan.withOpacity(0.12)
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
                               color: (_startDate != null && _endDate != null)
-                                  ? _kCyan.withOpacity(0.5)
-                                  : _kBorder,
+                                  ? AppColors.of(context).cyan.withOpacity(0.5)
+                                  : AppColors.of(context).border,
                             ),
                           ),
                           child: Text(
@@ -472,8 +465,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             style: TextStyle(
                               fontSize: 16,
                               color: (_startDate != null && _endDate != null)
-                                  ? _kCyan
-                                  : _kTextDim,
+                                  ? AppColors.of(context).cyan
+                                  : AppColors.of(context).textDim,
                             ),
                           ),
                         ),
@@ -501,7 +494,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         _chartPoints.isNotEmpty)
                       Text(
                         'Среднее по локации',
-                        style: const TextStyle(fontSize: 10, color: _kTextDim),
+                        style: TextStyle(fontSize: 10, color: AppColors.of(context).textDim),
                       ),
                   ],
                 ),
@@ -511,7 +504,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 _ChartBlock(
                   label: 'Температура',
                   unit: '°C',
-                  color: _kAccent,
+                  color: AppColors.of(context).accent,
                   points: _chartPoints.map((p) => p.temperature).toList(),
                   timestamps: _chartPoints.map((p) => p.timestamp).whereType<DateTime>().toList(),
                   period: _chartPeriod,
@@ -520,13 +513,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ),
 
                 const SizedBox(height: 2),
-                Divider(height: 20, color: _kBorder),
+                Divider(height: 20, color: AppColors.of(context).border),
 
                 // Влажность
                 _ChartBlock(
                   label: 'Влажность',
                   unit: '%',
-                  color: _kCyan,
+                  color: AppColors.of(context).cyan,
                   points: _chartPoints.map((p) => p.humidity).toList(),
                   timestamps: _chartPoints.map((p) => p.timestamp).whereType<DateTime>().toList(),
                   period: _chartPeriod,
@@ -571,9 +564,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: _kBorder.withOpacity(0.5),
+                    color: AppColors.of(context).border.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(7),
-                    border: Border.all(color: _kBorder),
+                    border: Border.all(color: AppColors.of(context).border),
                   ),
                   child: Text(
                     () {
@@ -583,9 +576,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           : _period.label;
                       return '$_targetLabel  ·  $periodStr  ·  ${_format.toUpperCase()}';
                     }(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: _kTextDim,
+                      color: AppColors.of(context).textDim,
                       letterSpacing: 0.2,
                     ),
                   ),
@@ -603,22 +596,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       decoration: BoxDecoration(
                         color: _reportLoading
-                            ? _kAccent.withOpacity(0.5)
-                            : _kYellowBg,
+                            ? AppColors.of(context).accent.withOpacity(0.5)
+                            : AppColors.of(context).yellowBg,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _kAccent.withOpacity(0.6)),
+                        border: Border.all(color: AppColors.of(context).accent.withOpacity(0.6)),
                       ),
                       alignment: Alignment.center,
                       child: _reportLoading
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 18, height: 18,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2, color: _kAccent),
+                                strokeWidth: 2, color: AppColors.of(context).accent),
                             )
-                          : const Text(
+                          : Text(
                               'Скачать отчёт',
                               style: TextStyle(
-                                color: _kAccent,
+                                color: AppColors.of(context).accent,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
                                 letterSpacing: 0.4,
@@ -651,9 +644,9 @@ class _SectionCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _kCard,
+        color: AppColors.of(context).card,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _kBorder),
+        border: Border.all(color: AppColors.of(context).border),
       ),
       child: child,
     );
@@ -669,10 +662,10 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 10,
         fontWeight: FontWeight.w700,
-        color: _kTextDim,
+        color: AppColors.of(context).textDim,
         letterSpacing: 1.2,
       ),
     );
@@ -694,10 +687,10 @@ class _ToggleTab extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? _kCyan.withOpacity(0.12) : Colors.transparent,
+          color: selected ? AppColors.of(context).cyan.withOpacity(0.12) : Colors.transparent,
           borderRadius: BorderRadius.circular(7),
           border: Border.all(
-            color: selected ? _kCyan.withOpacity(0.6) : _kBorder,
+            color: selected ? AppColors.of(context).cyan.withOpacity(0.6) : AppColors.of(context).border,
           ),
         ),
         child: Text(
@@ -705,7 +698,7 @@ class _ToggleTab extends StatelessWidget {
           style: TextStyle(
             fontSize: 13,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-            color: selected ? _kCyan : _kTextDim,
+            color: selected ? AppColors.of(context).cyan : AppColors.of(context).textDim,
           ),
         ),
       ),
@@ -728,24 +721,25 @@ class _StyledDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = AppColors.of(context);
     return DropdownButtonFormField<T>(
       value: value,
       dropdownColor: Theme.of(context).colorScheme.surface,
-      style: const TextStyle(color: Colors.white, fontSize: 13),
-      iconEnabledColor: _kTextDim,
+      style: TextStyle(color: c.textMain, fontSize: 13),
+      iconEnabledColor: c.textDim,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: _kTextDim, fontSize: 12),
+        labelStyle: TextStyle(color: c.textDim, fontSize: 12),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(7),
-          borderSide: const BorderSide(color: _kBorder),
+          borderSide: BorderSide(color: c.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(7),
-          borderSide: const BorderSide(color: _kCyan),
+          borderSide: BorderSide(color: c.cyan),
         ),
         filled: true,
-        fillColor: _kCard2,
+        fillColor: c.card2,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
       items: items,
@@ -768,16 +762,16 @@ class _DateButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
         decoration: BoxDecoration(
-          color: active ? _kBorder.withOpacity(0.8) : Colors.transparent,
+          color: active ? AppColors.of(context).border.withOpacity(0.8) : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: active ? _kCyan.withOpacity(0.4) : _kBorder),
+          border: Border.all(color: active ? AppColors.of(context).cyan.withOpacity(0.4) : AppColors.of(context).border),
         ),
         alignment: Alignment.center,
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12,
-            color: active ? _kCyan : _kTextDim,
+            color: active ? AppColors.of(context).cyan : AppColors.of(context).textDim,
             fontWeight: active ? FontWeight.w600 : FontWeight.w400,
           ),
           overflow: TextOverflow.ellipsis,
@@ -802,17 +796,17 @@ class _FormatButton extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
         decoration: BoxDecoration(
-          color: selected ? _kBorder : Colors.transparent,
+          color: selected ? AppColors.of(context).border : Colors.transparent,
           borderRadius: BorderRadius.circular(7),
           border: Border.all(
-            color: selected ? _kCyan.withOpacity(0.5) : _kBorder,
+            color: selected ? AppColors.of(context).cyan.withOpacity(0.5) : AppColors.of(context).border,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12,
-            color: selected ? _kCyan : _kTextDim,
+            color: selected ? AppColors.of(context).cyan : AppColors.of(context).textDim,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
           ),
         ),
@@ -873,10 +867,10 @@ class _ChartBlock extends StatelessWidget {
         const SizedBox(height: 8),
 
         if (loading)
-          const SizedBox(
+          SizedBox(
             height: 100,
             child: Center(
-              child: CircularProgressIndicator(color: _kCyan, strokeWidth: 2),
+              child: CircularProgressIndicator(color: AppColors.of(context).cyan, strokeWidth: 2),
             ),
           )
         else if (error != null)
@@ -885,18 +879,18 @@ class _ChartBlock extends StatelessWidget {
             child: Center(
               child: Text(
                 error!,
-                style: const TextStyle(color: _kTextDim, fontSize: 12),
+                style: TextStyle(color: AppColors.of(context).textDim, fontSize: 12),
                 textAlign: TextAlign.center,
               ),
             ),
           )
         else if (points.isEmpty)
-          const SizedBox(
+          SizedBox(
             height: 70,
             child: Center(
               child: Text(
                 'Нет данных за выбранный период',
-                style: TextStyle(color: _kTextDim, fontSize: 12),
+                style: TextStyle(color: AppColors.of(context).textDim, fontSize: 12),
               ),
             ),
           )
@@ -915,7 +909,7 @@ class _ChartBlock extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             decoration: BoxDecoration(
-              color: _kCard2,
+              color: AppColors.of(context).card2,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Row(
@@ -924,25 +918,25 @@ class _ChartBlock extends StatelessWidget {
                 _StatCell(
                   label: 'Мин',
                   value: '${points.reduce((a, b) => a < b ? a : b).toStringAsFixed(1)}$unit',
-                  color: _kCyan,
+                  color: AppColors.of(context).cyan,
                 ),
                 _Divider(),
                 _StatCell(
                   label: 'Среднее',
                   value: '${(points.reduce((a, b) => a + b) / points.length).toStringAsFixed(1)}$unit',
-                  color: Colors.white,
+                  color: AppColors.of(context).textMain,
                 ),
                 _Divider(),
                 _StatCell(
                   label: 'Макс',
                   value: '${points.reduce((a, b) => a > b ? a : b).toStringAsFixed(1)}$unit',
-                  color: _kAccent,
+                  color: AppColors.of(context).accent,
                 ),
                 _Divider(),
                 _StatCell(
                   label: 'Точек',
                   value: '${points.length}',
-                  color: _kTextDim,
+                  color: AppColors.of(context).textDim,
                 ),
               ],
             ),
@@ -963,7 +957,7 @@ class _StatCell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: 9, color: _kTextDim, letterSpacing: 0.4)),
+        Text(label, style: TextStyle(fontSize: 9, color: AppColors.of(context).textDim, letterSpacing: 0.4)),
         const SizedBox(height: 3),
         Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
       ],
@@ -974,6 +968,6 @@ class _StatCell extends StatelessWidget {
 class _Divider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Container(width: 1, height: 24, color: _kBorder);
+    return Container(width: 1, height: 24, color: AppColors.of(context).border);
   }
 }

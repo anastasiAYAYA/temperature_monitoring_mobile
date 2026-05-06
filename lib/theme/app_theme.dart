@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
-// ── Акцентные цвета (одинаковы в обеих темах) ─────────────────────────────────
-const kAccent = Color(0xFFFFD550); // жёлтый
-const kCyan   = Color(0xFF07BCD4); // голубой
-const kGreen  = Color(0xFF01E676); // зелёный
-const kRed    = Color(0xFFFF5252); // красный
-const kOrange = Color(0xFFFFB300); // оранжевый
+// ── Акцентные цвета ───────────────────────────────────────────────────────────
+const kAccent     = Color(0xFFFFD550); // жёлтый (фон кнопок, бордеры)
+const kAccentDark = Color(0xFFf5a714); // янтарно-коричневый — текст на жёлтом в светлой теме
+const kCyan       = Color(0xFF07BCD4);
+const kGreen      = Color(0xFF01E676);
+const kGreenDark = Color(0xFF00d16b);
+const kRed        = Color(0xFFFF5252);
+const kOrange     = Color(0xFFFFB300);
 
 // ── Тёмная тема ───────────────────────────────────────────────────────────────
 class _DarkPalette {
@@ -18,7 +20,7 @@ class _DarkPalette {
   static const yellowBg = Color(0xFF312C1C);
   static const redBg    = Color(0xFF321C1B);
   static const greenBg  = Color(0xFF0D2B1F);
-  static const surface  = Color(0xFF111111); // диалоги
+  static const surface  = Color(0xFF111111);
 }
 
 // ── Светлая тема ──────────────────────────────────────────────────────────────
@@ -29,17 +31,17 @@ class _LightPalette {
   static const border   = Color(0xFFD1DBE3);
   static const textDim  = Color(0xFF7A8A9E);
   static const textMain = Color(0xFF0D1B2A);
-  static const yellowBg = Color(0xFFFFF8E1);
+  // Чуть насыщеннее чем чистый белый — жёлтый заметнее
+  static const yellowBg = Color(0xFFFFF3CC);
   static const redBg    = Color(0xFFFFEBEE);
-  static const greenBg  = Color(0xFFE8F5E9);
-  static const surface  = Color(0xFFFFFFFF); // диалоги
+  static const greenBg  = Color(0xFF0D2B1F);
+  static const surface  = Color(0xFFFFFFFF);
 }
 
-// ── AppColors — текущие цвета в зависимости от темы ──────────────────────────
-class AppColors { // класс для получения цветов в зависимости от темы
-  const AppColors._({required this.isDark}); // конструктор класса
-
-  final bool isDark; // признак темной темы
+// ── AppColors ─────────────────────────────────────────────────────────────────
+class AppColors {
+  const AppColors._({required this.isDark});
+  final bool isDark;
 
   Color get bg       => isDark ? _DarkPalette.bg       : _LightPalette.bg;
   Color get card     => isDark ? _DarkPalette.card     : _LightPalette.card;
@@ -52,68 +54,77 @@ class AppColors { // класс для получения цветов в зав
   Color get greenBg  => isDark ? _DarkPalette.greenBg  : _LightPalette.greenBg;
   Color get surface  => isDark ? _DarkPalette.surface  : _LightPalette.surface;
 
-  // Акценты одинаковы
-  Color get accent => kAccent; // жёлтый
-  Color get cyan   => kCyan; // голубой
-  Color get green  => kGreen; // зелёный
-  Color get red    => kRed; // красный
-  Color get orange => kOrange; // оранжевый
+  Color get accent => isDark ? kAccent : kAccentDark;
+  Color get cyan   => kCyan;
+  Color get green  => isDark ? kGreen : kGreenDark;
+  Color get red    => kRed;
+  Color get orange => kOrange;
 
-  static const AppColors dark  = AppColors._(isDark: true); // тёмная тема
-  static const AppColors light = AppColors._(isDark: false); // светлая тема
+  /// Цвет текста/иконок поверх жёлтого фона.
+  /// Тёмная: kAccent (жёлтый читается на тёмном), светлая: kAccentDark (коричневый).
+  Color get accentText => isDark ? kAccent : kAccentDark;
+
+  static const AppColors dark  = AppColors._(isDark: true);
+  static const AppColors light = AppColors._(isDark: false);
 }
 
-// ── InheritedWidget — провайдер темы ─────────────────────────────────────────
-class AppThemeProvider extends InheritedWidget { // класс для получения цветов в зависимости от темы
+// ── AppThemeProvider ──────────────────────────────────────────────────────────
+class AppThemeProvider extends InheritedWidget {
   const AppThemeProvider({
-    super.key, // ключ для идентификации
-    required this.isDark, // признак темной темы
-    required this.toggle, // функция для переключения темы
-    required super.child, // child - дочерний виджет
+    super.key,
+    required this.isDark,
+    required this.toggle,
+    required super.child,
   });
 
-  final bool isDark; // признак темной темы
-  final VoidCallback toggle; // функция для переключения темы
+  final bool isDark;
+  final VoidCallback toggle;
 
-  AppColors get colors => isDark ? AppColors.dark : AppColors.light; // получение цветов в зависимости от темы
+  AppColors get colors => isDark ? AppColors.dark : AppColors.light;
 
-  static AppThemeProvider of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<AppThemeProvider>()!; // получение провайдера темы из контекста
+  static AppThemeProvider of(BuildContext context) {
+    final result = context.dependOnInheritedWidgetOfExactType<AppThemeProvider>();
+    assert(result != null, 'AppThemeProvider not found in widget tree');
+    return result!;
+  }
+
+  static AppThemeProvider? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppThemeProvider>();
 
   @override
-  bool updateShouldNotify(AppThemeProvider old) => old.isDark != isDark; // обновление при изменении признака темной темы
+  bool updateShouldNotify(AppThemeProvider old) => old.isDark != isDark;
 }
 
-// ── MaterialTheme по режиму ───────────────────────────────────────────────────
-ThemeData buildMaterialTheme({required bool isDark}) { // функция для построения темы Material
-  if (isDark) { // если темная тема
+// ── MaterialTheme ─────────────────────────────────────────────────────────────
+ThemeData buildMaterialTheme({required bool isDark}) {
+  if (isDark) {
     return ThemeData.dark().copyWith(
       scaffoldBackgroundColor: _DarkPalette.bg,
       colorScheme: const ColorScheme.dark(
         primary: kCyan,
         secondary: kAccent,
-        surface: _DarkPalette.surface,        // тёмный — фон диалогов
-        onSurface: Colors.white,              // белый — текст в диалогах
+        surface: _DarkPalette.surface,
+        onSurface: Colors.white,
       ),
-      dividerColor: _DarkPalette.border, // тёмно-серый разделитель 
-      snackBarTheme: const SnackBarThemeData( // тёмная тема
-        backgroundColor: Color(0xFF1E1E1E), // тёмно-серый фон
-        contentTextStyle: TextStyle(color: Colors.white), // белый текст
+      dividerColor: _DarkPalette.border,
+      snackBarTheme: const SnackBarThemeData(
+        backgroundColor: Color(0xFF1E1E1E),
+        contentTextStyle: TextStyle(color: Colors.white),
       ),
     );
-  } else { // если светлая тема
+  } else {
     return ThemeData.light().copyWith(
       scaffoldBackgroundColor: _LightPalette.bg,
       colorScheme: const ColorScheme.light(
         primary: kCyan,
-        secondary: kAccent,
-        surface: _LightPalette.surface,       // белый — фон диалогов
-        onSurface: _LightPalette.textMain,    // тёмный — текст в диалогах
+        secondary: kAccentDark,
+        surface: _LightPalette.surface,
+        onSurface: _LightPalette.textMain,
       ),
       dividerColor: _LightPalette.border,
       snackBarTheme: SnackBarThemeData(
         backgroundColor: _LightPalette.textMain,
-        contentTextStyle:
-            const TextStyle(color: Colors.white),
+        contentTextStyle: const TextStyle(color: Colors.white),
       ),
       cardColor: _LightPalette.card,
       dialogBackgroundColor: _LightPalette.surface,

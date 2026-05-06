@@ -1,33 +1,20 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
 import '../models/audit_entry.dart';
 import '../models/location_details.dart';
 import '../models/user_model.dart';
 import '../models/user_role.dart';
 import '../services/app_repository.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_theme.dart' show AppThemeProvider;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Фирменная палитра
-// ─────────────────────────────────────────────────────────────────────────────
-
-const _kBg      = Color(0xFF0A0A0A);
-const _kCard    = Color(0x4D323232);
-const _kCard2   = Color(0x334B4B4B);
-const _kBorder  = Color(0xFF19282B);
-const _kAccent  = Color(0xFFFFD550);
-const _kCyan    = Color(0xFF07BCD4);
-const _kGreen   = Color(0xFF01E676);
-const _kRed     = Color(0xFFFF5252);
-const _kYellowBg= Color(0xFF312C1C);
-const _kRedBg   = Color(0xFF321C1B);
-const _kTextDim = Color(0xFF7A8A8E);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Главный виджет
-// ─────────────────────────────────────────────────────────────────────────────
-
+/// Настройки и администрирование: профиль, команда, для admin — список компаний и
+/// детали локации через `GET /locations/{id}/details` ([loadLocationDetails] в репозитории).
+///
+/// **Роли:** admin видит все компании и агрегированные данные; editor/viewer опираются на
+/// `subordinateUsers` и текущего пользователя ([_loadAllCompanyUsers]).
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
@@ -50,27 +37,22 @@ class _SettingsScreenState extends State<SettingsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
 
-  // ── Для admin: какая компания выбрана и что показываем ────────────────────
   int? _adminSelectedLocationId;
   String _adminSection = 'users';
 
-  // Кеш: locationId → данные из /locations/{id}/details
   final Map<int, LocationDetails> _locationDetailsCache = {};
   bool _locationDetailsLoading = false;
   String? _locationDetailsError;
 
-  // Кеш: locationId → кол-во сотрудников (без admin) — для списка компаний
   final Map<int, int> _companyUserCountCache = {};
   bool _companyCountsLoading = false;
 
-  // Все пользователи компании для editor/viewer (загружаются отдельно)
   List<UserModel> _allCompanyUsers = [];
   bool _allCompanyUsersLoading = false;
 
   @override
   void initState() {
     super.initState();
-    // Editor/viewer: tabCtrl с 2 табами
     _tabCtrl = TabController(length: 2, vsync: this);
     if (widget.repo.role != UserRole.admin) {
       _loadAllCompanyUsers();
@@ -87,6 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   // ── Локальный парсер JSON-списка ─────────────────────────────────────────
 
+  /// Ответы API могут быть массивом или объектом `{ "data": [...] }` — приводим к списку.
   List<dynamic> _parseList(String body) {
     try {
       final decoded = jsonDecode(body);
@@ -192,10 +175,10 @@ class _SettingsScreenState extends State<SettingsScreen>
         UserRole.viewer => 'viewer',
       };
 
-  Color _roleColor(String role) => switch (role) {
-        'admin'  => _kAccent,
-        'editor' => _kCyan,
-        _        => _kGreen,
+  Color _roleColor(AppScheme sch, String role) => switch (role) {
+        'admin'  => sch.accent,
+        'editor' => kCyan,
+        _        => kGreen,
       };
 
   String _initials(String fullName, String username) {
@@ -235,9 +218,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: _kCyan.withOpacity(0.07),
+                      color: kCyan.withOpacity(0.07),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: _kCyan.withOpacity(0.35)),
+                      border: Border.all(color: kCyan.withOpacity(0.35)),
                     ),
                     child: Row(
                       children: [
@@ -245,7 +228,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           isDark
                               ? Icons.light_mode_outlined
                               : Icons.dark_mode_outlined,
-                          color: _kCyan, size: 18,
+                          color: kCyan, size: 18,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -254,7 +237,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 ? 'Переключить на светлую тему'
                                 : 'Переключить на тёмную тему',
                             style: const TextStyle(
-                              color: _kCyan,
+                              color: kCyan,
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
                             ),
@@ -264,11 +247,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                           width: 42, height: 24,
                           decoration: BoxDecoration(
                             color: isDark
-                                ? _kBorder
-                                : _kCyan.withOpacity(0.2),
+                                ? AppColors.of(context).border
+                                : kCyan.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                                color: _kCyan.withOpacity(0.5)),
+                                color: kCyan.withOpacity(0.5)),
                           ),
                           child: AnimatedAlign(
                             duration: const Duration(milliseconds: 180),
@@ -280,7 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                               margin: const EdgeInsets.symmetric(
                                   horizontal: 3),
                               decoration: const BoxDecoration(
-                                color: _kCyan,
+                                color: kCyan,
                                 shape: BoxShape.circle,
                               ),
                             ),
@@ -403,7 +386,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         obscurePass
                             ? Icons.visibility_outlined
                             : Icons.visibility_off_outlined,
-                        color: _kTextDim, size: 18,
+                        color: AppColors.of(context).textDim, size: 18,
                       ),
                     ),
                   ),
@@ -446,18 +429,18 @@ class _SettingsScreenState extends State<SettingsScreen>
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: _kCyan.withOpacity(0.07),
+                        color: kCyan.withOpacity(0.07),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: _kCyan.withOpacity(0.25)),
+                        border: Border.all(color: kCyan.withOpacity(0.25)),
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.info_outline, size: 13, color: _kCyan),
+                          Icon(Icons.info_outline, size: 13, color: kCyan),
                           SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               'Локация будет назначена автоматически',
-                              style: TextStyle(color: _kCyan, fontSize: 11),
+                              style: TextStyle(color: kCyan, fontSize: 11),
                             ),
                           ),
                         ],
@@ -536,16 +519,17 @@ class _SettingsScreenState extends State<SettingsScreen>
     final fullName = repo.currentUserFullName ?? username;
     final email    = repo.currentUserEmail;
     final roleStr  = _roleFromEnum(repo.role);
+    final sch      = AppColors.of(context);
 
     return Container(
-      color: _kBg,
+      color: sch.bg,
       child: Column(
         children: [
           // ── Шапка профиля ─────────────────────────────────────────────────
           Container(
-            decoration: const BoxDecoration(
-              color: _kCard,
-              border: Border(bottom: BorderSide(color: _kBorder)),
+            decoration: BoxDecoration(
+              color: sch.card,
+              border: Border(bottom: BorderSide(color: sch.border)),
             ),
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Column(
@@ -560,8 +544,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                         children: [
                           Text(
                             fullName,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: sch.textMain,
                               fontSize: 17,
                               fontWeight: FontWeight.w700,
                             ),
@@ -570,8 +554,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                             const SizedBox(height: 2),
                             Text(
                               email,
-                              style: const TextStyle(
-                                  color: _kTextDim, fontSize: 12),
+                              style: TextStyle(
+                                  color: sch.textDim, fontSize: 12),
                             ),
                           ],
                           const SizedBox(height: 4),
@@ -580,19 +564,19 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: roleStr == 'admin'
-                                  ? _kYellowBg
+                                  ? sch.yellowBg
                                   : roleStr == 'editor'
-                                      ? _kBorder
-                                      : const Color(0xFF0D2B1F),
+                                      ? sch.border
+                                      : sch.greenBg,
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(
-                                  color: _roleColor(roleStr).withOpacity(0.5)),
+                                  color: _roleColor(sch, roleStr).withOpacity(0.5)),
                             ),
                             child: Text(
                               _roleLabel(roleStr),
                               style: TextStyle(
                                 fontSize: 11,
-                                color: _roleColor(roleStr),
+                                color: _roleColor(sch, roleStr),
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: 0.3,
                               ),
@@ -602,20 +586,20 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.edit_outlined,
-                          color: _kCyan, size: 20),
+                      icon: Icon(Icons.edit_outlined,
+                          color: kCyan, size: 20),
                       tooltip: 'Редактировать профиль',
                       onPressed: _showEditProfileDialog,
                     ),
                     IconButton(
-                      icon: const Icon(Icons.settings_outlined,
-                          color: _kTextDim, size: 20),
+                      icon: Icon(Icons.settings_outlined,
+                          color: sch.textDim, size: 20),
                       tooltip: 'Настройки приложения',
                       onPressed: _showAppSettingsDialog,
                     ),
                     IconButton(
-                      icon: const Icon(Icons.logout,
-                          color: _kRed, size: 20),
+                      icon: Icon(Icons.logout,
+                          color: kRed, size: 20),
                       tooltip: 'Выйти',
                       onPressed: () {
                         repo.logout();
@@ -630,11 +614,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                 if (repo.role != UserRole.admin) ...[
                   TabBar(
                     controller: _tabCtrl,
-                    indicatorColor: _kCyan,
+                    indicatorColor: kCyan,
                     indicatorWeight: 2,
-                    labelColor: _kCyan,
-                    unselectedLabelColor: _kTextDim,
-                    dividerColor: _kBorder,
+                    labelColor: kCyan,
+                    unselectedLabelColor: sch.textDim,
+                    dividerColor: sch.border,
                     labelStyle: const TextStyle(
                         fontWeight: FontWeight.w600, fontSize: 13),
                     tabs: [
@@ -661,14 +645,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                       }),
                     )
                   else
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 12),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
                           'Компании',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: AppColors.of(context).textMain,
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
@@ -715,7 +699,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     if (_locationDetailsLoading && details == null) {
       return const Center(
-        child: CircularProgressIndicator(color: _kCyan, strokeWidth: 2),
+        child: CircularProgressIndicator(color: kCyan, strokeWidth: 2),
       );
     }
 
@@ -724,21 +708,21 @@ class _SettingsScreenState extends State<SettingsScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, color: _kRed, size: 40),
+            const Icon(Icons.error_outline, color: kRed, size: 40),
             const SizedBox(height: 10),
             Text(_locationDetailsError!,
-                style: const TextStyle(color: _kTextDim, fontSize: 13)),
+                style: TextStyle(color: AppColors.of(context).textDim, fontSize: 13)),
             const SizedBox(height: 12),
             GestureDetector(
               onTap: () => _loadLocationDetails(locationId, forceReload: true),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
-                  border: Border.all(color: _kCyan.withOpacity(0.4)),
+                  border: Border.all(color: kCyan.withOpacity(0.4)),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text('Повторить',
-                    style: TextStyle(color: _kCyan, fontSize: 13)),
+                    style: TextStyle(color: kCyan, fontSize: 13)),
               ),
             ),
           ],
@@ -755,7 +739,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       onSectionChange: (s) => setState(() => _adminSection = s),
       onAddUser:       _showCreateUserDialog,
       roleLabel:       _roleLabel,
-      roleColor:       _roleColor,
+      roleColor:       (role) => _roleColor(AppColors.of(context), role),
       initials:        _initials,
       onReload:        () => _loadLocationDetails(locationId, forceReload: true),
     );
@@ -778,7 +762,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ? _showCreateUserDialog
               : null,
           roleLabel: _roleLabel,
-          roleColor: _roleColor,
+          roleColor: (role) => _roleColor(AppColors.of(context), role),
           initials: _initials,
           onRefresh: _loadAllCompanyUsers,
         ),
@@ -815,28 +799,28 @@ class _AdminBreadcrumb extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
-                color: _kCard2,
+                color: AppColors.of(context).card2,
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: _kBorder),
+                border: Border.all(color: AppColors.of(context).border),
               ),
-              child: const Icon(Icons.arrow_back_ios_new,
-                  size: 13, color: _kTextDim),
+              child: Icon(Icons.arrow_back_ios_new,
+                  size: 13, color: AppColors.of(context).textDim),
             ),
           ),
           const SizedBox(width: 8),
           Text(
             'Компании',
-            style: const TextStyle(color: _kTextDim, fontSize: 13),
+            style: TextStyle(color: AppColors.of(context).textDim, fontSize: 13),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 6),
-            child: Icon(Icons.chevron_right, size: 14, color: _kTextDim),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Icon(Icons.chevron_right, size: 14, color: AppColors.of(context).textDim),
           ),
           Expanded(
             child: Text(
               companyName,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: AppColors.of(context).textMain,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
@@ -898,34 +882,34 @@ class _AdminCompanyListState extends State<_AdminCompanyList> {
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
           child: TextField(
             controller: _searchCtrl,
-            style: const TextStyle(color: Colors.white, fontSize: 14),
+            style: TextStyle(color: AppColors.of(context).textMain, fontSize: 14),
             onChanged: (v) => setState(() => _searchQuery = v),
             decoration: InputDecoration(
               hintText: 'Поиск компании…',
-              hintStyle: const TextStyle(color: _kTextDim, fontSize: 13),
+              hintStyle: TextStyle(color: AppColors.of(context).textDim, fontSize: 13),
               prefixIcon:
-                  const Icon(Icons.search, color: _kTextDim, size: 18),
+                  Icon(Icons.search, color: AppColors.of(context).textDim, size: 18),
               suffixIcon: _searchQuery.isNotEmpty
                   ? GestureDetector(
                       onTap: () {
                         _searchCtrl.clear();
                         setState(() => _searchQuery = '');
                       },
-                      child: const Icon(Icons.close,
-                          color: _kTextDim, size: 16),
+                      child: Icon(Icons.close,
+                          color: AppColors.of(context).textDim, size: 16),
                     )
                   : null,
               filled: true,
-              fillColor: _kCard,
+              fillColor: AppColors.of(context).card,
               contentPadding: const EdgeInsets.symmetric(
                   horizontal: 12, vertical: 10),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: _kBorder),
+                borderSide: BorderSide(color: AppColors.of(context).border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: _kCyan),
+                borderSide: const BorderSide(color: kCyan),
               ),
             ),
           ),
@@ -937,15 +921,15 @@ class _AdminCompanyListState extends State<_AdminCompanyList> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.business_outlined,
-                          size: 40, color: _kTextDim),
+                      Icon(Icons.business_outlined,
+                          size: 40, color: AppColors.of(context).textDim),
                       const SizedBox(height: 10),
                       Text(
                         _searchQuery.isNotEmpty
                             ? 'Компании не найдены'
                             : 'Нет компаний',
-                        style: const TextStyle(
-                            color: _kTextDim, fontSize: 13),
+                        style: TextStyle(
+                            color: AppColors.of(context).textDim, fontSize: 13),
                       ),
                     ],
                   ),
@@ -978,10 +962,10 @@ class _AdminCompanyListState extends State<_AdminCompanyList> {
               padding: const EdgeInsets.only(top: 10, bottom: 4),
               child: Text(
                 letter,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: _kTextDim,
+                  color: AppColors.of(context).textDim,
                   letterSpacing: 1.5,
                 ),
               ),
@@ -1017,9 +1001,9 @@ class _CompanyTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: _kCard,
+          color: AppColors.of(context).card,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _kBorder),
+          border: Border.all(color: AppColors.of(context).border),
         ),
         child: Row(
           children: [
@@ -1027,20 +1011,20 @@ class _CompanyTile extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: _kCyan.withOpacity(0.10),
+                color: kCyan.withOpacity(0.10),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: _kCyan.withOpacity(0.3)),
+                border: Border.all(color: kCyan.withOpacity(0.3)),
               ),
               alignment: Alignment.center,
               child: const Icon(Icons.business_outlined,
-                  size: 18, color: _kCyan),
+                  size: 18, color: kCyan),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 name,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: AppColors.of(context).textMain,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -1049,21 +1033,21 @@ class _CompanyTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: _kCyan.withOpacity(0.10),
+                color: kCyan.withOpacity(0.10),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _kCyan.withOpacity(0.3)),
+                border: Border.all(color: kCyan.withOpacity(0.3)),
               ),
               child: Text(
                 '$userCount',
                 style: const TextStyle(
                   fontSize: 11,
-                  color: _kCyan,
+                  color: kCyan,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ),
             const SizedBox(width: 6),
-            const Icon(Icons.chevron_right, color: _kTextDim, size: 18),
+            Icon(Icons.chevron_right, color: AppColors.of(context).textDim, size: 18),
           ],
         ),
       ),
@@ -1135,7 +1119,7 @@ class _AdminCompanyUsersSection extends StatelessWidget {
         Expanded(
           child: isLoading && details == null
               ? const Center(
-                  child: CircularProgressIndicator(color: _kCyan, strokeWidth: 2),
+                  child: CircularProgressIndicator(color: kCyan, strokeWidth: 2),
                 )
               : section == 'audit'
                   ? _AuditTab(
@@ -1181,10 +1165,10 @@ class _SectionTab extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(
-            color: isActive ? _kCyan.withOpacity(0.12) : _kCard,
+            color: isActive ? kCyan.withOpacity(0.12) : AppColors.of(context).card,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: isActive ? _kCyan.withOpacity(0.5) : _kBorder,
+              color: isActive ? kCyan.withOpacity(0.5) : AppColors.of(context).border,
             ),
           ),
           child: Column(
@@ -1192,13 +1176,13 @@ class _SectionTab extends StatelessWidget {
             children: [
               Icon(icon,
                   size: 18,
-                  color: isActive ? _kCyan : _kTextDim),
+                  color: isActive ? kCyan : AppColors.of(context).textDim),
               const SizedBox(height: 3),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 11,
-                  color: isActive ? _kCyan : _kTextDim,
+                  color: isActive ? kCyan : AppColors.of(context).textDim,
                   fontWeight: isActive
                       ? FontWeight.w600
                       : FontWeight.w400,
@@ -1241,9 +1225,9 @@ class _AdminLocationsSection extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: _kCard,
+            color: AppColors.of(context).card,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _kBorder),
+            border: Border.all(color: AppColors.of(context).border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1251,13 +1235,13 @@ class _AdminLocationsSection extends StatelessWidget {
               Row(
                 children: [
                   const Icon(Icons.location_on_outlined,
-                      size: 18, color: _kCyan),
+                      size: 18, color: kCyan),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       loc?.name ?? '',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: AppColors.of(context).textMain,
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
@@ -1280,10 +1264,10 @@ class _AdminLocationsSection extends StatelessWidget {
 
         // Список датчиков
         if (sensors.isNotEmpty) ...[
-          const Text(
+          Text(
             'Датчики',
             style: TextStyle(
-              color: _kTextDim,
+              color: AppColors.of(context).textDim,
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.1,
@@ -1295,9 +1279,9 @@ class _AdminLocationsSection extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: _kCard,
+                  color: AppColors.of(context).card,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: _kBorder),
+                  border: Border.all(color: AppColors.of(context).border),
                 ),
                 child: Row(
                   children: [
@@ -1306,34 +1290,34 @@ class _AdminLocationsSection extends StatelessWidget {
                       height: 8,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: s.isOnline ? _kGreen : _kRed,
+                        color: s.isOnline ? kGreen : kRed,
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         s.name,
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 13),
+                        style: TextStyle(
+                            color: AppColors.of(context).textMain, fontSize: 13),
                       ),
                     ),
                     Text(
                       s.isOnline ? 'Online' : 'Offline',
                       style: TextStyle(
                         fontSize: 11,
-                        color: s.isOnline ? _kGreen : _kRed,
+                        color: s.isOnline ? kGreen : kRed,
                       ),
                     ),
                   ],
                 ),
               )),
         ] else
-          const Center(
+          Center(
             child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
+              padding: const EdgeInsets.symmetric(vertical: 24),
               child: Text(
                 'Датчики не найдены',
-                style: TextStyle(color: _kTextDim, fontSize: 13),
+                style: TextStyle(color: AppColors.of(context).textDim, fontSize: 13),
               ),
             ),
           ),
@@ -1354,11 +1338,11 @@ class _InfoRow extends StatelessWidget {
       child: Row(
         children: [
           Text(label,
-              style: const TextStyle(color: _kTextDim, fontSize: 12)),
+              style: TextStyle(color: AppColors.of(context).textDim, fontSize: 12)),
           const Spacer(),
           Text(value,
-              style: const TextStyle(
-                  color: Colors.white,
+              style: TextStyle(
+                  color: AppColors.of(context).textMain,
                   fontSize: 12,
                   fontWeight: FontWeight.w500)),
         ],
@@ -1396,13 +1380,13 @@ class _AllUsersTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Center(
-        child: CircularProgressIndicator(color: _kCyan, strokeWidth: 2),
+        child: CircularProgressIndicator(color: kCyan, strokeWidth: 2),
       );
     }
 
     return RefreshIndicator(
-      color: _kCyan,
-      backgroundColor: _kCard,
+      color: kCyan,
+      backgroundColor: AppColors.of(context).card,
       onRefresh: onRefresh,
       child: _UsersTab(
         repo: repo,
@@ -1446,8 +1430,8 @@ class _UsersTab extends StatelessWidget {
           children: [
             Text(
               'Сотрудники (${users.length})',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: AppColors.of(context).textMain,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -1460,21 +1444,21 @@ class _UsersTab extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: _kCyan.withOpacity(0.10),
+                    color: kCyan.withOpacity(0.10),
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: _kCyan.withOpacity(0.35)),
+                    border: Border.all(color: kCyan.withOpacity(0.35)),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.person_add_outlined,
-                          size: 14, color: _kCyan),
+                          size: 14, color: kCyan),
                       SizedBox(width: 6),
                       Text(
                         'Добавить',
                         style: TextStyle(
                           fontSize: 12,
-                          color: _kCyan,
+                          color: kCyan,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -1487,12 +1471,12 @@ class _UsersTab extends StatelessWidget {
         const SizedBox(height: 8),
 
         if (users.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 32),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 32),
             child: Center(
               child: Text(
                 'Нет сотрудников',
-                style: TextStyle(color: _kTextDim),
+                style: TextStyle(color: AppColors.of(context).textDim),
               ),
             ),
           )
@@ -1502,12 +1486,12 @@ class _UsersTab extends StatelessWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: _kCard2,
+              color: AppColors.of(context).card2,
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(8)),
-              border: Border.all(color: _kBorder),
+              border: Border.all(color: AppColors.of(context).border),
             ),
-            child: const Row(
+            child: Row(
               children: [
                 Expanded(
                   flex: 3,
@@ -1515,7 +1499,7 @@ class _UsersTab extends StatelessWidget {
                     'Пользователь',
                     style: TextStyle(
                         fontSize: 11,
-                        color: _kTextDim,
+                        color: AppColors.of(context).textDim,
                         fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -1525,7 +1509,7 @@ class _UsersTab extends StatelessWidget {
                     'Email',
                     style: TextStyle(
                         fontSize: 11,
-                        color: _kTextDim,
+                        color: AppColors.of(context).textDim,
                         fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -1535,7 +1519,7 @@ class _UsersTab extends StatelessWidget {
                     'Роль',
                     style: TextStyle(
                         fontSize: 11,
-                        color: _kTextDim,
+                        color: AppColors.of(context).textDim,
                         fontWeight: FontWeight.w600),
                     textAlign: TextAlign.center,
                   ),
@@ -1581,12 +1565,12 @@ class _UserRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: _kCard,
+        color: AppColors.of(context).card,
         border: Border(
-          left: const BorderSide(color: _kBorder),
-          right: const BorderSide(color: _kBorder),
+          left: BorderSide(color: AppColors.of(context).border),
+          right: BorderSide(color: AppColors.of(context).border),
           bottom: BorderSide(
-              color: isLast ? _kBorder : const Color(0xFF19282B)),
+              color: isLast ? AppColors.of(context).border : const Color(0xFF19282B)),
         ),
         borderRadius: isLast
             ? const BorderRadius.vertical(bottom: Radius.circular(8))
@@ -1616,8 +1600,8 @@ class _UserRow extends StatelessWidget {
                     user.fullName.isNotEmpty
                         ? user.fullName
                         : user.username,
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 13),
+                    style: TextStyle(
+                        color: AppColors.of(context).textMain, fontSize: 13),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -1628,7 +1612,7 @@ class _UserRow extends StatelessWidget {
             flex: 2,
             child: Text(
               user.email ?? '—',
-              style: const TextStyle(color: _kTextDim, fontSize: 12),
+              style: TextStyle(color: AppColors.of(context).textDim, fontSize: 12),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -1638,11 +1622,11 @@ class _UserRow extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
               decoration: BoxDecoration(
-                color: roleColor == _kAccent
-                    ? _kYellowBg
-                    : roleColor == _kRed
-                        ? _kRedBg
-                        : _kBorder,
+                color: roleColor == AppColors.of(context).accent
+                    ? AppColors.of(context).yellowBg
+                    : roleColor == kRed
+                        ? AppColors.of(context).redBg
+                        : AppColors.of(context).border,
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: roleColor.withOpacity(0.4)),
               ),
@@ -1719,7 +1703,7 @@ class _AuditTabState extends State<_AuditTab> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
             child: CircularProgressIndicator(
-                color: _kCyan, strokeWidth: 2),
+                color: kCyan, strokeWidth: 2),
           );
         }
 
@@ -1830,20 +1814,20 @@ class _AuditTabState extends State<_AuditTab> {
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: DropdownButtonFormField<int?>(
                   value: _selectedUserId,
-                  dropdownColor: const Color(0xFF1A1A1A),
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  dropdownColor: Theme.of(context).colorScheme.surface,
+                  style: TextStyle(color: AppColors.of(context).textMain, fontSize: 13),
                   decoration: InputDecoration(
                     labelText: 'Сотрудник',
-                    labelStyle: const TextStyle(color: _kTextDim, fontSize: 12),
-                    prefixIcon: const Icon(Icons.person_outline, color: _kTextDim, size: 16),
+                    labelStyle: TextStyle(color: AppColors.of(context).textDim, fontSize: 12),
+                    prefixIcon: Icon(Icons.person_outline, color: AppColors.of(context).textDim, size: 16),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: _kBorder),
+                      borderSide: BorderSide(color: AppColors.of(context).border),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: _kCyan),
+                      borderSide: const BorderSide(color: kCyan),
                     ),
                   ),
                   items: [
@@ -1874,11 +1858,11 @@ class _AuditTabState extends State<_AuditTab> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.history, color: _kTextDim, size: 36),
+                Icon(Icons.history, color: AppColors.of(context).textDim, size: 36),
                 const SizedBox(height: 10),
-                const Text(
+                Text(
                   'История пуста',
-                  style: TextStyle(color: _kTextDim),
+                  style: TextStyle(color: AppColors.of(context).textDim),
                 ),
                 const SizedBox(height: 12),
                 GestureDetector(
@@ -1888,12 +1872,12 @@ class _AuditTabState extends State<_AuditTab> {
                         horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
                       border:
-                          Border.all(color: _kCyan.withOpacity(0.4)),
+                          Border.all(color: kCyan.withOpacity(0.4)),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Text(
                       'Обновить',
-                      style: TextStyle(color: _kCyan, fontSize: 13),
+                      style: TextStyle(color: kCyan, fontSize: 13),
                     ),
                   ),
                 ),
@@ -1903,14 +1887,14 @@ class _AuditTabState extends State<_AuditTab> {
         }
 
         return RefreshIndicator(
-          color: _kCyan,
-          backgroundColor: _kCard,
+          color: kCyan,
+          backgroundColor: AppColors.of(context).card,
           onRefresh: _reload,
           child: ListView.separated(
             padding: const EdgeInsets.all(12),
             itemCount: entries.length,
             separatorBuilder: (_, __) =>
-                const Divider(height: 1, color: _kBorder),
+                Divider(height: 1, color: AppColors.of(context).border),
             itemBuilder: (context, i) {
               final e = entries[i];
               return Padding(
@@ -1925,7 +1909,7 @@ class _AuditTabState extends State<_AuditTab> {
                         height: 7,
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
-                          color: _kCyan,
+                          color: kCyan,
                         ),
                       ),
                     ),
@@ -1935,8 +1919,8 @@ class _AuditTabState extends State<_AuditTab> {
                         children: [
                           Text(
                             e.action,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: AppColors.of(context).textMain,
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
                             ),
@@ -1944,8 +1928,8 @@ class _AuditTabState extends State<_AuditTab> {
                           const SizedBox(height: 3),
                           Text(
                             '${e.user}  •  ${e.time}',
-                            style: const TextStyle(
-                                color: _kTextDim, fontSize: 11),
+                            style: TextStyle(
+                                color: AppColors.of(context).textDim, fontSize: 11),
                           ),
                         ],
                       ),
@@ -1971,10 +1955,10 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 10,
         fontWeight: FontWeight.w700,
-        color: _kTextDim,
+        color: AppColors.of(context).textDim,
         letterSpacing: 1.1,
       ),
     );
@@ -1992,14 +1976,14 @@ class _Avatar extends StatelessWidget {
       height: 58,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: _kYellowBg,
-        border: Border.all(color: _kAccent.withOpacity(0.6), width: 2),
+        color: AppColors.of(context).yellowBg,
+        border: Border.all(color: AppColors.of(context).accent.withOpacity(0.6), width: 2),
       ),
       alignment: Alignment.center,
       child: Text(
         initials,
-        style: const TextStyle(
-          color: _kAccent,
+        style: TextStyle(
+          color: AppColors.of(context).accent,
           fontSize: 22,
           fontWeight: FontWeight.w700,
         ),
@@ -2020,16 +2004,17 @@ class _DarkDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     return AlertDialog(
       backgroundColor: Theme.of(context).colorScheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: _kBorder),
+        side: BorderSide(color: sch.border),
       ),
       title: Text(
         title,
-        style: const TextStyle(
-            color: Colors.white,
+        style: TextStyle(
+            color: sch.textMain,
             fontWeight: FontWeight.w600,
             fontSize: 16),
       ),
@@ -2055,22 +2040,23 @@ class _DarkField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     return TextField(
       controller: controller,
       obscureText: obscure,
       keyboardType: keyboardType,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
+      style: TextStyle(color: sch.textMain, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: _kTextDim, fontSize: 13),
+        labelStyle: TextStyle(color: sch.textDim, fontSize: 13),
         suffixIcon: suffix,
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _kBorder),
+          borderSide: BorderSide(color: sch.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _kCyan),
+          borderSide: const BorderSide(color: kCyan),
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -2093,20 +2079,21 @@ class _DarkDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     return DropdownButtonFormField<T>(
       value: value,
       dropdownColor: Theme.of(context).colorScheme.surface,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
+      style: TextStyle(color: sch.textMain, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: _kTextDim, fontSize: 13),
+        labelStyle: TextStyle(color: sch.textDim, fontSize: 13),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _kBorder),
+          borderSide: BorderSide(color: sch.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _kCyan),
+          borderSide: const BorderSide(color: kCyan),
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -2127,7 +2114,7 @@ class _DarkTextButton extends StatelessWidget {
     return TextButton(
       onPressed: onTap,
       child:
-          Text(label, style: const TextStyle(color: _kTextDim, fontSize: 13)),
+          Text(label, style: TextStyle(color: AppColors.of(context).textDim, fontSize: 13)),
     );
   }
 }
@@ -2141,7 +2128,7 @@ class _DarkFilledButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return FilledButton(
       style: FilledButton.styleFrom(
-        backgroundColor: _kCyan,
+        backgroundColor: kCyan,
         foregroundColor: Colors.black,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

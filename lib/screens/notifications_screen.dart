@@ -4,19 +4,7 @@ import '../models/alarm_model.dart';
 import '../models/location_model.dart';
 import '../models/user_role.dart';
 import '../services/app_repository.dart';
-
-// ── Фирменная палитра ─────────────────────────────────────────────────────────
-const _kBg       = Color(0xFF0A0A0A);
-const _kCard     = Color(0x4D323232);
-const _kCard2    = Color(0x334B4B4B);
-const _kBorder   = Color(0xFF19282B);
-const _kCyan     = Color(0xFF07BCD4);
-const _kGreen    = Color(0xFF01E676);
-const _kRed      = Color(0xFFFF5252);
-const _kOrange   = Color(0xFFFF9800);
-const _kAccent   = Color(0xFFFFD550);
-const _kRedBg    = Color(0xFF321C1B);
-const _kTextDim  = Color(0xFF7A8A8E);
+import '../theme/app_colors.dart';
 
 // ── Сортировка ────────────────────────────────────────────────────────────────
 
@@ -30,8 +18,12 @@ extension _SortOrderLabel on _SortOrder {
       };
 }
 
-// ── Экран ─────────────────────────────────────────────────────────────────────
-
+/// Журнал событий (алармы): фильтр по статусу, сортировка, для admin — выбор компании.
+///
+/// Связь с сущностями: `AlarmModel.sensorId` сопоставляется с датчиками локации через [AppRepository.sensors].
+/// Изменение статуса: `repo.updateAlarm` (PATCH), затем [onRefresh] для синхронизации с сервером.
+///
+/// `_mutedLocationIds` хранится только в памяти клиента — заглушка до API отключения уведомлений.
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({
     super.key,
@@ -50,14 +42,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   AlarmStatus? _filterStatus;
   _SortOrder _sortOrder = _SortOrder.newestFirst;
 
-  // Поиск (для admin)
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
 
-  // Выбранная компания для admin (null = список компаний)
+  /// У admin: если задан — показываем тревоги только датчиков этой локации.
   int? _adminSelectedLocationId;
 
-  // Локально отключённые уведомления для локаций (фронт-заглушка до бэка)
   final Set<int> _mutedLocationIds = {};
 
   bool get _isAdmin => widget.repo.role == UserRole.admin;
@@ -70,6 +60,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   // ── Данные ───────────────────────────────────────────────────────────────
 
+  /// Фильтрует тревоги по принадлежности датчиков локации и опционально по статусу.
   List<AlarmModel> _alarmsForLocation(int? locationId) {
     final sensors = widget.repo.sensors
         .where((s) => locationId == null || s.groupId == locationId)
@@ -87,6 +78,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     switch (_sortOrder) {
       case _SortOrder.newestFirst:
         list = list.reversed.toList();
+      // Умышленное падение в следующую метку: после reverse выходим через `break` у oldestFirst.
       case _SortOrder.oldestFirst:
         break;
       case _SortOrder.statusPriority:
@@ -124,15 +116,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   // ── Цвета / метки ────────────────────────────────────────────────────────
 
   Color _statusColor(AlarmStatus s) => switch (s) {
-        AlarmStatus.newAlarm     => _kRed,
-        AlarmStatus.acknowledged => _kOrange,
-        AlarmStatus.resolved     => _kGreen,
+        AlarmStatus.newAlarm     => kRed,
+        AlarmStatus.acknowledged => kOrange,
+        AlarmStatus.resolved     => kGreen,
       };
 
-  Color _statusBg(AlarmStatus s) => switch (s) {
-        AlarmStatus.newAlarm     => _kRedBg,
-        AlarmStatus.acknowledged => const Color(0xFF2A1E00),
-        AlarmStatus.resolved     => const Color(0xFF0D2B1F),
+  Color _statusBg(AppScheme c, AlarmStatus s) => switch (s) {
+        AlarmStatus.newAlarm     => c.redBg,
+        AlarmStatus.acknowledged => c.yellowBg,
+        AlarmStatus.resolved     => c.greenBg,
       };
 
   String _statusLabel(AlarmStatus s) => switch (s) {
@@ -143,6 +135,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   // ── Диалог действия ──────────────────────────────────────────────────────
 
+  /// `newStatus` — строка для API (`acknowledged` / `resolved`); маппится в репозитории на PATCH.
   Future<void> _showActionDialog({
     required AlarmModel alarm,
     required String newStatus,
@@ -154,20 +147,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => Theme(
-        data: ThemeData.dark().copyWith(
-          colorScheme: Theme.of(context).colorScheme,
-        ),
-        child: AlertDialog(
-          backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (ctx) {
+        final sch = AppColors.of(ctx);
+        return AlertDialog(
+          backgroundColor: Theme.of(ctx).colorScheme.surface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: _kBorder),
+            side: BorderSide(color: sch.border),
           ),
           title: Text(
             actionLabel,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: sch.textMain,
               fontSize: 16,
               fontWeight: FontWeight.w600,
             ),
@@ -180,17 +171,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: _kCard2,
+                  color: sch.card2,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: _kBorder),
+                  border: Border.all(color: sch.border),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       alarm.title,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: sch.textMain,
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
                       ),
@@ -199,8 +190,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       const SizedBox(height: 3),
                       Text(
                         alarm.description,
-                        style: const TextStyle(
-                            fontSize: 12, color: _kTextDim),
+                        style: TextStyle(
+                            fontSize: 12, color: sch.textDim),
                       ),
                     ],
                   ],
@@ -211,17 +202,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 controller: commentCtrl,
                 autofocus: true,
                 maxLines: 3,
-                style:
-                    const TextStyle(color: Colors.white, fontSize: 13),
+                style: TextStyle(color: sch.textMain, fontSize: 13),
                 decoration: InputDecoration(
                   hintText: hintText,
                   hintStyle:
-                      const TextStyle(color: _kTextDim, fontSize: 13),
+                      TextStyle(color: sch.textDim, fontSize: 13),
                   labelText: 'Комментарий',
-                  labelStyle: const TextStyle(color: _kTextDim),
+                  labelStyle: TextStyle(color: sch.textDim),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _kBorder),
+                    borderSide: BorderSide(color: sch.border),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -236,8 +226,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена',
-                  style: TextStyle(color: _kTextDim)),
+              child: Text('Отмена',
+                  style: TextStyle(color: sch.textDim)),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
@@ -252,8 +242,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       const TextStyle(fontWeight: FontWeight.w700)),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
 
     if (confirmed != true || !mounted) return;
@@ -279,22 +269,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => Theme(
-        data: ThemeData.dark().copyWith(
-          colorScheme: Theme.of(context).colorScheme,
-        ),
-        child: AlertDialog(
-          backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (ctx) {
+        final sch = AppColors.of(ctx);
+        return AlertDialog(
+          backgroundColor: Theme.of(ctx).colorScheme.surface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: _kBorder),
+            side: BorderSide(color: sch.border),
           ),
           title: Text(
             isMuted
                 ? 'Включить уведомления'
                 : 'Отключить уведомления',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: sch.textMain,
               fontSize: 16,
               fontWeight: FontWeight.w600,
             ),
@@ -306,20 +294,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: _kCard2,
+                  color: sch.card2,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: _kBorder),
+                  border: Border.all(color: sch.border),
                 ),
                 child: Row(
                   children: [
                     Icon(Icons.business_outlined,
-                        size: 16, color: _kCyan),
+                        size: 16, color: kCyan),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         location.name,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: sch.textMain,
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                         ),
@@ -336,26 +324,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         'Тревоги всё равно будут записываться, '
                         'но пуш-уведомления приходить не будут.',
                 style:
-                    const TextStyle(color: _kTextDim, fontSize: 13, height: 1.5),
+                    TextStyle(color: sch.textDim, fontSize: 13, height: 1.5),
               ),
               if (!isMuted) ...[
                 const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: _kRed.withOpacity(0.08),
+                    color: kRed.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: _kRed.withOpacity(0.25)),
+                    border: Border.all(color: kRed.withOpacity(0.25)),
                   ),
                   child: Row(
                     children: [
                       const Icon(Icons.warning_amber_outlined,
-                          size: 14, color: _kRed),
+                          size: 14, color: kRed),
                       const SizedBox(width: 6),
                       const Expanded(
                         child: Text(
                           'Функция в разработке — изменение сохраняется только локально',
-                          style: TextStyle(fontSize: 11, color: _kRed),
+                          style: TextStyle(fontSize: 11, color: kRed),
                         ),
                       ),
                     ],
@@ -367,12 +355,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена',
-                  style: TextStyle(color: _kTextDim)),
+              child: Text('Отмена',
+                  style: TextStyle(color: sch.textDim)),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: isMuted ? _kGreen : _kRed,
+                backgroundColor: isMuted ? kGreen : kRed,
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
@@ -384,8 +372,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
 
     if (confirmed != true || !mounted) return;
@@ -413,15 +401,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: _kBg,
-        colorScheme: Theme.of(context).colorScheme,
-      ),
-      child: Container(
-        color: _kBg,
-        child: _isAdmin ? _buildAdminView() : _buildUserView(),
-      ),
+    return ColoredBox(
+      color: AppColors.of(context).bg,
+      child: _isAdmin ? _buildAdminView() : _buildUserView(),
     );
   }
 
@@ -461,9 +443,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       children: [
         // ── Шапка ──────────────────────────────────────────────────────────
         Container(
-          decoration: const BoxDecoration(
-            color: Color(0x4D323232),
-            border: Border(bottom: BorderSide(color: _kBorder)),
+          decoration: BoxDecoration(
+            color: AppColors.of(context).card,
+            border: Border(bottom: BorderSide(color: AppColors.of(context).border)),
           ),
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
           child: Column(
@@ -471,10 +453,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             children: [
               Row(
                 children: [
-                  const Text(
+                  Text(
                     'Уведомления',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.of(context).textMain,
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.2,
@@ -486,16 +468,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: _kRedBg,
+                        color: AppColors.of(context).redBg,
                         borderRadius: BorderRadius.circular(20),
                         border:
-                            Border.all(color: _kRed.withOpacity(0.5)),
+                            Border.all(color: kRed.withOpacity(0.5)),
                       ),
                       child: Text(
                         '$_newCount новых',
                         style: const TextStyle(
                           fontSize: 11,
-                          color: _kRed,
+                          color: kRed,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.3,
                         ),
@@ -507,35 +489,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               // Поиск
               TextField(
                 controller: _searchCtrl,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
+                style: TextStyle(color: AppColors.of(context).textMain, fontSize: 14),
                 onChanged: (v) => setState(() => _searchQuery = v),
                 decoration: InputDecoration(
                   hintText: 'Поиск компании…',
                   hintStyle:
-                      const TextStyle(color: _kTextDim, fontSize: 13),
-                  prefixIcon: const Icon(Icons.search,
-                      color: _kTextDim, size: 18),
+                      TextStyle(color: AppColors.of(context).textDim, fontSize: 13),
+                  prefixIcon: Icon(Icons.search,
+                      color: AppColors.of(context).textDim, size: 18),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? GestureDetector(
                           onTap: () {
                             _searchCtrl.clear();
                             setState(() => _searchQuery = '');
                           },
-                          child: const Icon(Icons.close,
-                              color: _kTextDim, size: 16),
+                          child: Icon(Icons.close,
+                              color: AppColors.of(context).textDim, size: 16),
                         )
                       : null,
                   filled: true,
-                  fillColor: _kCard,
+                  fillColor: AppColors.of(context).card,
                   contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 10),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _kBorder),
+                    borderSide: BorderSide(color: AppColors.of(context).border),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _kCyan),
+                    borderSide: const BorderSide(color: kCyan),
                   ),
                 ),
               ),
@@ -551,8 +533,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     _searchQuery.isNotEmpty
                         ? 'Компании не найдены'
                         : 'Нет компаний',
-                    style: const TextStyle(
-                        color: _kTextDim, fontSize: 14),
+                    style: TextStyle(
+                        color: AppColors.of(context).textDim, fontSize: 14),
                   ),
                 )
               : ListView.builder(
@@ -569,10 +551,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               const EdgeInsets.only(top: 10, bottom: 4),
                           child: Text(
                             letter,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
-                              color: _kTextDim,
+                              color: AppColors.of(context).textDim,
                               letterSpacing: 1.5,
                             ),
                           ),
@@ -613,9 +595,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       children: [
         // ── Шапка ──────────────────────────────────────────────────────────
         Container(
-          decoration: const BoxDecoration(
-            color: Color(0x4D323232),
-            border: Border(bottom: BorderSide(color: _kBorder)),
+          decoration: BoxDecoration(
+            color: AppColors.of(context).card,
+            border: Border(bottom: BorderSide(color: AppColors.of(context).border)),
           ),
           padding: const EdgeInsets.fromLTRB(14, 14, 8, 0),
           child: Column(
@@ -630,20 +612,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: _kCard2,
+                        color: AppColors.of(context).card2,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: _kBorder),
+                        border: Border.all(color: AppColors.of(context).border),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new,
-                          size: 14, color: _kTextDim),
+                      child: Icon(Icons.arrow_back_ios_new,
+                          size: 14, color: AppColors.of(context).textDim),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       loc?.name ?? '',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: AppColors.of(context).textMain,
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
@@ -660,13 +642,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           color: isMuted
-                              ? _kRed.withOpacity(0.12)
-                              : _kCard2,
+                              ? kRed.withOpacity(0.12)
+                              : AppColors.of(context).card2,
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
                             color: isMuted
-                                ? _kRed.withOpacity(0.45)
-                                : _kBorder,
+                                ? kRed.withOpacity(0.45)
+                                : AppColors.of(context).border,
                           ),
                         ),
                         child: Row(
@@ -677,7 +659,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                   ? Icons.notifications_off_outlined
                                   : Icons.notifications_outlined,
                               size: 14,
-                              color: isMuted ? _kRed : _kTextDim,
+                              color: isMuted ? kRed : AppColors.of(context).textDim,
                             ),
                             const SizedBox(width: 5),
                             Text(
@@ -685,7 +667,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: isMuted ? _kRed : _kTextDim,
+                                color: isMuted ? kRed : AppColors.of(context).textDim,
                               ),
                             ),
                           ],
@@ -710,21 +692,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: _kRed.withOpacity(0.08),
+              color: kRed.withOpacity(0.08),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: _kRed.withOpacity(0.25)),
+              border: Border.all(color: kRed.withOpacity(0.25)),
             ),
             child: const Row(
               children: [
                 Icon(Icons.notifications_off_outlined,
-                    size: 14, color: _kRed),
+                    size: 14, color: kRed),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Уведомления для этой компании отключены',
                     style: TextStyle(
                         fontSize: 12,
-                        color: _kRed,
+                        color: kRed,
                         fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -749,9 +731,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       children: [
         // ── Шапка ──────────────────────────────────────────────────────────
         Container(
-          decoration: const BoxDecoration(
-            color: Color(0x4D323232),
-            border: Border(bottom: BorderSide(color: _kBorder)),
+          decoration: BoxDecoration(
+            color: AppColors.of(context).card,
+            border: Border(bottom: BorderSide(color: AppColors.of(context).border)),
           ),
           padding: const EdgeInsets.fromLTRB(14, 14, 8, 0),
           child: Column(
@@ -759,10 +741,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             children: [
               Row(
                 children: [
-                  const Text(
+                  Text(
                     'Уведомления',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.of(context).textMain,
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.2,
@@ -774,16 +756,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: _kRedBg,
+                        color: AppColors.of(context).redBg,
                         borderRadius: BorderRadius.circular(20),
                         border:
-                            Border.all(color: _kRed.withOpacity(0.5)),
+                            Border.all(color: kRed.withOpacity(0.5)),
                       ),
                       child: Text(
                         '$_newCount новых',
                         style: const TextStyle(
                           fontSize: 11,
-                          color: _kRed,
+                          color: kRed,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.3,
                         ),
@@ -812,11 +794,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return PopupMenuButton<_SortOrder>(
       color: Theme.of(context).colorScheme.surface,
       tooltip: 'Сортировка',
-      icon: const Text(
+      icon: Text(
         'СОРТИРОВКА',
         style: TextStyle(
           fontSize: 10,
-          color: _kTextDim,
+          color: AppColors.of(context).textDim,
           letterSpacing: 0.8,
           fontWeight: FontWeight.w600,
         ),
@@ -834,20 +816,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: _sortOrder == o
-                            ? _kCyan
+                            ? kCyan
                             : Colors.transparent,
                         border: Border.all(
                           color: _sortOrder == o
-                              ? _kCyan
-                              : Colors.white38,
+                              ? kCyan
+                              : AppColors.of(context).border,
                         ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Text(
                       o.label,
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 13),
+                      style: TextStyle(
+                          color: AppColors.of(context).textMain, fontSize: 13),
                     ),
                   ],
                 ),
@@ -865,7 +847,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           _FilterChip(
             label: 'Все',
             selected: _filterStatus == null,
-            color: _kCyan,
+            color: kCyan,
             onTap: () => setState(() => _filterStatus = null),
           ),
           ...AlarmStatus.values.map((s) => _FilterChip(
@@ -882,10 +864,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _alarmList(List<AlarmModel> alarms, {required bool canAct}) {
     if (alarms.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'Событий нет',
-          style: TextStyle(color: _kTextDim, fontSize: 14),
+          style: TextStyle(color: AppColors.of(context).textDim, fontSize: 14),
         ),
       );
     }
@@ -895,25 +877,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final alarm = alarms[index];
+        final sch = AppColors.of(context);
         return _AlarmCard(
           alarm: alarm,
           canAct: canAct,
           statusColor: _statusColor(alarm.status),
-          statusBg: _statusBg(alarm.status),
+          statusBg: _statusBg(sch, alarm.status),
           statusLabel: _statusLabel(alarm.status),
           onAcknowledge: () => _showActionDialog(
             alarm: alarm,
             newStatus: 'acknowledged',
             actionLabel: 'Взять в работу',
             hintText: 'Опишите, что предпринимается...',
-            accentColor: _kOrange,
+            accentColor: kOrange,
           ),
           onResolve: () => _showActionDialog(
             alarm: alarm,
             newStatus: 'resolved',
             actionLabel: 'Закрыть событие',
             hintText: 'Опишите, как проблема была решена...',
-            accentColor: _kGreen,
+            accentColor: kGreen,
           ),
         );
       },
@@ -947,10 +930,10 @@ class _CompanyNotifTile extends StatelessWidget {
         padding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: _kCard,
+          color: AppColors.of(context).card,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isMuted ? _kRed.withOpacity(0.3) : _kBorder,
+            color: isMuted ? kRed.withOpacity(0.3) : AppColors.of(context).border,
           ),
         ),
         child: Row(
@@ -961,13 +944,13 @@ class _CompanyNotifTile extends StatelessWidget {
               height: 34,
               decoration: BoxDecoration(
                 color: isMuted
-                    ? _kRed.withOpacity(0.08)
-                    : _kCyan.withOpacity(0.10),
+                    ? kRed.withOpacity(0.08)
+                    : kCyan.withOpacity(0.10),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
                   color: isMuted
-                      ? _kRed.withOpacity(0.25)
-                      : _kCyan.withOpacity(0.25),
+                      ? kRed.withOpacity(0.25)
+                      : kCyan.withOpacity(0.25),
                 ),
               ),
               alignment: Alignment.center,
@@ -976,7 +959,7 @@ class _CompanyNotifTile extends StatelessWidget {
                     ? Icons.notifications_off_outlined
                     : Icons.business_outlined,
                 size: 18,
-                color: isMuted ? _kRed : _kCyan,
+                color: isMuted ? kRed : kCyan,
               ),
             ),
             const SizedBox(width: 12),
@@ -987,7 +970,7 @@ class _CompanyNotifTile extends StatelessWidget {
                   Text(
                     location.name,
                     style: TextStyle(
-                      color: isMuted ? _kTextDim : Colors.white,
+                      color: isMuted ? AppColors.of(context).textDim : AppColors.of(context).textMain,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
@@ -998,7 +981,7 @@ class _CompanyNotifTile extends StatelessWidget {
                     isMuted ? 'Уведомления отключены' : 'Нажмите чтобы посмотреть',
                     style: TextStyle(
                       fontSize: 11,
-                      color: isMuted ? _kRed : _kTextDim,
+                      color: isMuted ? kRed : AppColors.of(context).textDim,
                     ),
                   ),
                 ],
@@ -1010,16 +993,16 @@ class _CompanyNotifTile extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
-                  color: _kRedBg,
+                  color: AppColors.of(context).redBg,
                   borderRadius: BorderRadius.circular(10),
                   border:
-                      Border.all(color: _kRed.withOpacity(0.45)),
+                      Border.all(color: kRed.withOpacity(0.45)),
                 ),
                 child: Text(
                   '$newCount',
                   style: const TextStyle(
                     fontSize: 11,
-                    color: _kRed,
+                    color: kRed,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1037,12 +1020,12 @@ class _CompanyNotifTile extends StatelessWidget {
                       ? Icons.notifications_off_outlined
                       : Icons.notifications_outlined,
                   size: 18,
-                  color: isMuted ? _kRed : _kTextDim,
+                  color: isMuted ? kRed : AppColors.of(context).textDim,
                 ),
               ),
             ),
             const SizedBox(width: 4),
-            const Icon(Icons.chevron_right, size: 18, color: _kTextDim),
+            Icon(Icons.chevron_right, size: 18, color: AppColors.of(context).textDim),
           ],
         ),
       ),
@@ -1077,8 +1060,8 @@ class _AlarmCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0x4D323232),
-          border: Border.all(color: _kBorder),
+          color: AppColors.of(context).card,
+          border: Border.all(color: AppColors.of(context).border),
         ),
         child: IntrinsicHeight(
           child: Row(
@@ -1097,8 +1080,8 @@ class _AlarmCard extends StatelessWidget {
                           Expanded(
                             child: Text(
                               alarm.title,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: AppColors.of(context).textMain,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                               ),
@@ -1131,9 +1114,9 @@ class _AlarmCard extends StatelessWidget {
                         const SizedBox(height: 5),
                         Text(
                           alarm.description,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: _kTextDim,
+                            color: AppColors.of(context).textDim,
                             height: 1.4,
                           ),
                         ),
@@ -1146,9 +1129,9 @@ class _AlarmCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 8),
                           decoration: BoxDecoration(
-                            color: const Color(0x334B4B4B),
+                            color: AppColors.of(context).card2,
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: _kBorder),
+                            border: Border.all(color: AppColors.of(context).border),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1157,9 +1140,9 @@ class _AlarmCard extends StatelessWidget {
                                 alarm.status == AlarmStatus.resolved
                                     ? 'КОММЕНТАРИЙ ПРИ ЗАКРЫТИИ'
                                     : 'КОММЕНТАРИЙ ОПЕРАТОРА',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 9,
-                                  color: _kTextDim,
+                                  color: AppColors.of(context).textDim,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.8,
                                 ),
@@ -1167,9 +1150,9 @@ class _AlarmCard extends StatelessWidget {
                               const SizedBox(height: 4),
                               Text(
                                 alarm.comment!,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 13,
-                                  color: Colors.white,
+                                  color: AppColors.of(context).textMain,
                                 ),
                               ),
                             ],
@@ -1179,7 +1162,7 @@ class _AlarmCard extends StatelessWidget {
                       if (canAct &&
                           alarm.status != AlarmStatus.resolved) ...[
                         const SizedBox(height: 10),
-                        Container(height: 1, color: _kBorder),
+                        Container(height: 1, color: AppColors.of(context).border),
                         const SizedBox(height: 10),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
@@ -1188,12 +1171,12 @@ class _AlarmCard extends StatelessWidget {
                             if (alarm.status == AlarmStatus.newAlarm)
                               _ActionBtn(
                                 label: 'В РАБОТУ',
-                                color: _kOrange,
+                                color: kOrange,
                                 onTap: onAcknowledge,
                               ),
                             _ActionBtn(
                               label: 'РЕШЕНО',
-                              color: _kGreen,
+                              color: kGreen,
                               filled: true,
                               onTap: onResolve,
                             ),
@@ -1239,7 +1222,7 @@ class _FilterChip extends StatelessWidget {
               selected ? color.withOpacity(0.12) : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: selected ? color.withOpacity(0.55) : _kBorder,
+            color: selected ? color.withOpacity(0.55) : AppColors.of(context).border,
           ),
         ),
         child: Text(
@@ -1248,7 +1231,7 @@ class _FilterChip extends StatelessWidget {
             fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.5,
-            color: selected ? color : _kTextDim,
+            color: selected ? color : AppColors.of(context).textDim,
           ),
         ),
       ),

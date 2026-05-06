@@ -3,35 +3,23 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
-
 import '../models/location_model.dart';
 import '../models/sensor_model.dart';
 import '../models/user_role.dart';
 import '../services/app_repository.dart';
+import '../theme/app_colors.dart';
 import '../widgets/line_chart.dart';
 
-// ── Палитра (совпадает с settings/notifications) ──────────────────────────────
-const _kCard    = Color(0x4D323232);
-const _kCard2   = Color(0x334B4B4B);
-const _kBorder  = Color(0xFF19282B);
-const _kAccent  = Color(0xFFFFD550);
-const _kCyan    = Color(0xFF07BCD4);
-const _kGreen   = Color(0xFF01E676);
-const _kRed     = Color(0xFFFF5252);
-const _kOrange  = Color(0xFFFFB300);
-const _kTextDim = Color(0xFF7A8A8E);
-const _kGreenBg = Color(0xFF0D2B1F);
-const _kRedBg   = Color(0xFF321C1B);
-
-// ── Экран ─────────────────────────────────────────────────────────────────────
-
+/// Каталог датчиков: история через `repo.loadHistory`, создание ЦБУ/датчика, пороги, опционально ИИ-пороги.
+///
+/// На защите: связь «локация → control unit → sensor», различие ролей ([UserRole]) для видимости кнопок.
 class SensorsScreen extends StatefulWidget {
   const SensorsScreen({
     super.key,
     required this.repo,
     required this.onRefresh,
   });
+
   final AppRepository repo;
   final Future<void> Function() onRefresh;
 
@@ -40,6 +28,7 @@ class SensorsScreen extends StatefulWidget {
 }
 
 class _SensorsScreenState extends State<SensorsScreen> {
+  /// Период для `loadHistory` на карточках (согласован с [AppRepository.loadHistory]).
   String period = 'День';
   String search = '';
 
@@ -82,18 +71,18 @@ class _SensorsScreenState extends State<SensorsScreen> {
                 padding: const EdgeInsets.all(10),
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
-                  color: kAccent.withOpacity(0.08),
+                  color: c.accent.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: kAccent.withOpacity(0.25)),
+                  border: Border.all(color: c.accent.withOpacity(0.25)),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.info_outline, color: kAccent, size: 16),
-                    SizedBox(width: 8),
+                    Icon(Icons.info_outline, color: c.accent, size: 16),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Локация → Блок управления → Датчики',
-                        style: TextStyle(color: kAccent, fontSize: 12),
+                        style: TextStyle(color: c.accent, fontSize: 12),
                       ),
                     ),
                   ],
@@ -352,37 +341,37 @@ class _SensorsScreenState extends State<SensorsScreen> {
                     _SectionLabel(text: 'ТЕМПЕРАТУРА (°C)'),
                     const SizedBox(height: 6),
                     _ThresholdRow(
-                      label: 'Внимание', color: _kOrange,
+                      label: 'Внимание', color: kOrange,
                       minCtrl: wMinTCtrl, maxCtrl: wMaxTCtrl, signed: true,
                     ),
                     const SizedBox(height: 6),
                     _ThresholdRow(
-                      label: 'Тревога', color: _kRed,
+                      label: 'Тревога', color: kRed,
                       minCtrl: aMinTCtrl, maxCtrl: aMaxTCtrl, signed: true,
                     ),
                     const SizedBox(height: 14),
                     _SectionLabel(text: 'ВЛАЖНОСТЬ (%)'),
                     const SizedBox(height: 6),
                     _ThresholdRow(
-                      label: 'Внимание', color: _kOrange,
+                      label: 'Внимание', color: kOrange,
                       minCtrl: wMinHCtrl, maxCtrl: wMaxHCtrl,
                     ),
                     const SizedBox(height: 6),
                     _ThresholdRow(
-                      label: 'Тревога', color: _kRed,
+                      label: 'Тревога', color: kRed,
                       minCtrl: aMinHCtrl, maxCtrl: aMaxHCtrl,
                     ),
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: _kCyan.withOpacity(0.07),
+                        color: kCyan.withOpacity(0.07),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: _kCyan.withOpacity(0.2)),
+                        border: Border.all(color: kCyan.withOpacity(0.2)),
                       ),
                       child: const Text(
                         'Правило: Тревога min ≤ Внимание min < Внимание max ≤ Тревога max',
-                        style: TextStyle(fontSize: 11, color: _kCyan),
+                        style: TextStyle(fontSize: 11, color: kCyan),
                       ),
                     ),
                   ],
@@ -500,20 +489,20 @@ class _SensorsScreenState extends State<SensorsScreen> {
           children: [
             Expanded(
               child: TextField(
-                style: const TextStyle(color: Colors.white, fontSize: 14),
+                style: TextStyle(color: c.textMain, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'Поиск по локациям и датчикам',
-                  hintStyle: const TextStyle(color: _kTextDim, fontSize: 14),
-                  prefixIcon: const Icon(Icons.search, color: _kTextDim, size: 20),
+                  hintStyle: TextStyle(color: c.textDim, fontSize: 14),
+                  prefixIcon: Icon(Icons.search, color: c.textDim, size: 20),
                   filled: true,
-                  fillColor: _kCard,
+                  fillColor: c.card,
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _kBorder),
+                    borderSide: BorderSide(color: c.border),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _kCyan),
+                    borderSide: const BorderSide(color: kCyan),
                   ),
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -533,11 +522,11 @@ class _SensorsScreenState extends State<SensorsScreen> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: kAccent.withOpacity(0.12),
+                        color: c.accent.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: kAccent.withOpacity(0.35)),
+                        border: Border.all(color: c.accent.withOpacity(0.35)),
                       ),
-                      child: const Icon(Icons.router_outlined, color: kAccent, size: 20),
+                      child: Icon(Icons.router_outlined, color: c.accent, size: 20),
                     ),
                   ),
                 ),
@@ -549,11 +538,11 @@ class _SensorsScreenState extends State<SensorsScreen> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: _kCyan.withOpacity(0.12),
+                      color: kCyan.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: _kCyan.withOpacity(0.35)),
+                      border: Border.all(color: kCyan.withOpacity(0.35)),
                     ),
-                    child: const Icon(Icons.add, color: _kCyan, size: 20),
+                    child: const Icon(Icons.add, color: kCyan, size: 20),
                   ),
                 ),
             ],
@@ -563,12 +552,12 @@ class _SensorsScreenState extends State<SensorsScreen> {
 
         // ── Список ──────────────────────────────────────────────────────
         if (filteredEntries.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 40),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 40),
             child: Center(
               child: Text(
                 'Нет датчиков',
-                style: TextStyle(color: _kTextDim, fontSize: 14),
+                style: TextStyle(color: c.textDim, fontSize: 14),
               ),
             ),
           )
@@ -744,7 +733,7 @@ class _SensorDetailDialogState extends State<_SensorDetailDialog> {
     final points     = _showTemperature ? _tempPoints : _humPoints;
     final unit       = _showTemperature ? '°C' : '%';
     final label      = _showTemperature ? 'Температура' : 'Влажность';
-    final color      = _showTemperature ? _kAccent : _kCyan;
+    final color      = _showTemperature ? AppColors.of(context).accent : kCyan;
     final warningMin = _showTemperature ? s.warningMinTemp : s.warningMinHum;
     final warningMax = _showTemperature ? s.warningMaxTemp : s.warningMaxHum;
     final alarmMin   = _showTemperature ? s.alarmMinTemp   : s.alarmMinHum;
@@ -755,12 +744,12 @@ class _SensorDetailDialogState extends State<_SensorDetailDialog> {
         height: 80,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: _kCard2,
+          color: AppColors.of(context).card2,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _kBorder),
+          border: Border.all(color: AppColors.of(context).border),
         ),
         child: Text('Нет данных ($label)',
-            style: const TextStyle(color: _kTextDim, fontSize: 12)),
+            style: TextStyle(color: AppColors.of(context).textDim, fontSize: 12)),
       );
     }
 
@@ -795,15 +784,16 @@ class _SensorDetailDialogState extends State<_SensorDetailDialog> {
         Container(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           decoration: BoxDecoration(
-            color: _kCard2, borderRadius: BorderRadius.circular(6)),
+            color: AppColors.of(context).card2, borderRadius: BorderRadius.circular(6)),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _StatCell(label: 'МИН',
-                  value: '${minVal.toStringAsFixed(1)}$unit', color: _kCyan),
+                  value: '${minVal.toStringAsFixed(1)}$unit', color: kCyan),
               _VertDivider(),
               _StatCell(label: 'СРЕДНЕЕ',
-                  value: '${avg.toStringAsFixed(1)}$unit', color: Colors.white),
+                  value: '${avg.toStringAsFixed(1)}$unit',
+                  color: AppColors.of(context).textMain),
               _VertDivider(),
               _StatCell(label: 'МАКС',
                   value: '${maxVal.toStringAsFixed(1)}$unit', color: color),
@@ -811,13 +801,13 @@ class _SensorDetailDialogState extends State<_SensorDetailDialog> {
           ),
         ),
         const SizedBox(height: 6),
-        const Row(
+        Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.touch_app_outlined, size: 11, color: _kTextDim),
-            SizedBox(width: 4),
+            Icon(Icons.touch_app_outlined, size: 11, color: AppColors.of(context).textDim),
+            const SizedBox(width: 4),
             Text('Нажмите или проведите по графику',
-                style: TextStyle(fontSize: 10, color: _kTextDim)),
+                style: TextStyle(fontSize: 10, color: AppColors.of(context).textDim)),
           ],
         ),
       ],
@@ -853,13 +843,13 @@ class _SensorDetailDialogState extends State<_SensorDetailDialog> {
           Row(children: [
             _ChartToggleBtn(
               label: 'Температура', selected: _showTemperature,
-              color: _kAccent,
+              color: AppColors.of(context).accent,
               onTap: () => setState(() => _showTemperature = true),
             ),
             const SizedBox(width: 8),
             _ChartToggleBtn(
               label: 'Влажность', selected: !_showTemperature,
-              color: _kCyan,
+              color: kCyan,
               onTap: () => setState(() => _showTemperature = false),
             ),
           ]),
@@ -868,28 +858,28 @@ class _SensorDetailDialogState extends State<_SensorDetailDialog> {
             const SizedBox(
               height: 120,
               child: Center(child: CircularProgressIndicator(
-                  color: _kCyan, strokeWidth: 2)),
+                  color: kCyan, strokeWidth: 2)),
             )
           else
             _buildChart(),
           const SizedBox(height: 20),
           const _SectionLabel(text: 'ПОРОГИ ТЕМПЕРАТУРЫ (°C)'),
           const SizedBox(height: 8),
-          _ThresholdRow(label: 'Внимание', color: _kOrange,
+          _ThresholdRow(label: 'Внимание', color: kOrange,
               minCtrl: _wMinTCtrl, maxCtrl: _wMaxTCtrl, signed: true,
               readOnly: !canEdit),
           const SizedBox(height: 6),
-          _ThresholdRow(label: 'Тревога', color: _kRed,
+          _ThresholdRow(label: 'Тревога', color: kRed,
               minCtrl: _aMinTCtrl, maxCtrl: _aMaxTCtrl, signed: true,
               readOnly: !canEdit),
           const SizedBox(height: 20),
           const _SectionLabel(text: 'ПОРОГИ ВЛАЖНОСТИ (%)'),
           const SizedBox(height: 8),
-          _ThresholdRow(label: 'Внимание', color: _kOrange,
+          _ThresholdRow(label: 'Внимание', color: kOrange,
               minCtrl: _wMinHCtrl, maxCtrl: _wMaxHCtrl,
               readOnly: !canEdit),
           const SizedBox(height: 6),
-          _ThresholdRow(label: 'Тревога', color: _kRed,
+          _ThresholdRow(label: 'Тревога', color: kRed,
               minCtrl: _aMinHCtrl, maxCtrl: _aMaxHCtrl,
               readOnly: !canEdit),
           const SizedBox(height: 4),
@@ -973,9 +963,9 @@ class _LocationGroupState extends State<_LocationGroup> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: _kCard,
+        color: AppColors.of(context).card,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _kBorder),
+        border: Border.all(color: AppColors.of(context).border),
       ),
       child: Column(
         children: [
@@ -989,15 +979,15 @@ class _LocationGroupState extends State<_LocationGroup> {
                   Container(
                     width: 8, height: 8,
                     decoration: const BoxDecoration(
-                      shape: BoxShape.circle, color: _kCyan,
+                      shape: BoxShape.circle, color: kCyan,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       widget.location.name,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: AppColors.of(context).textMain,
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
@@ -1005,12 +995,12 @@ class _LocationGroupState extends State<_LocationGroup> {
                   ),
                   Text(
                     '$totalCount датч.',
-                    style: const TextStyle(color: _kTextDim, fontSize: 12),
+                    style: TextStyle(color: AppColors.of(context).textDim, fontSize: 12),
                   ),
                   const SizedBox(width: 8),
                   Icon(
                     _expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                    color: _kTextDim, size: 18,
+                    color: AppColors.of(context).textDim, size: 18,
                   ),
                 ],
               ),
@@ -1018,7 +1008,7 @@ class _LocationGroupState extends State<_LocationGroup> {
           ),
 
           if (_expanded) ...[
-            Container(height: 1, color: _kBorder),
+            Container(height: 1, color: AppColors.of(context).border),
 
             // ── Блоки управления со своими датчиками ─────────────────────
             ...widget.controlUnits.map((unit) {
@@ -1070,25 +1060,26 @@ class _ControlUnitGroup extends StatefulWidget {
 class _ControlUnitGroupState extends State<_ControlUnitGroup> {
   bool _expanded = true;
 
-  Color _gsmColor(int bars) => switch (bars) {
-        5 => _kGreen,
-        4 => _kGreen,
-        3 => _kGreen,
-        2 => _kOrange,
-        1 => _kRed,
-        _ => _kTextDim,
+  Color _gsmColor(AppScheme sch, int bars) => switch (bars) {
+        5 => kGreen,
+        4 => kGreen,
+        3 => kGreen,
+        2 => kOrange,
+        1 => kRed,
+        _ => sch.textDim,
       };
 
-  Color _batteryColor(bool isAc, int? level) {
-    if (isAc) return _kGreen;
-    if (level == null) return _kTextDim;
-    if (level >= 50) return _kGreen;
-    if (level >= 25) return _kOrange;
-    return _kRed;
+  Color _batteryColor(AppScheme sch, bool isAc, int? level) {
+    if (isAc) return kGreen;
+    if (level == null) return sch.textDim;
+    if (level >= 50) return kGreen;
+    if (level >= 25) return kOrange;
+    return kRed;
   }
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     final isOnline = widget.unit['is_online'] as bool? ?? false;
     final unitName = widget.unit['name'] as String? ?? '—';
 
@@ -1104,9 +1095,9 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
     return Container(
       margin: const EdgeInsets.fromLTRB(10, 6, 10, 0),
       decoration: BoxDecoration(
-        color: _kCard2,
+        color: sch.card2,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _kBorder),
+        border: Border.all(color: sch.border),
       ),
       child: Column(
         children: [
@@ -1120,13 +1111,13 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.router_outlined, color: _kAccent, size: 15),
+                      Icon(Icons.router_outlined, color: sch.accent, size: 15),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           unitName,
-                          style: const TextStyle(
-                            color: _kAccent,
+                          style: TextStyle(
+                            color: sch.accent,
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),
@@ -1135,10 +1126,10 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: isOnline ? _kGreenBg : _kRedBg,
+                          color: isOnline ? sch.greenBg : sch.redBg,
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(
-                            color: isOnline ? _kGreen.withOpacity(0.3) : _kRed.withOpacity(0.3),
+                            color: isOnline ? kGreen.withOpacity(0.3) : kRed.withOpacity(0.3),
                           ),
                         ),
                         child: Text(
@@ -1146,19 +1137,19 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            color: isOnline ? _kGreen : _kRed,
+                            color: isOnline ? kGreen : kRed,
                           ),
                         ),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         '${widget.sensors.length} датч.',
-                        style: const TextStyle(color: _kTextDim, fontSize: 11),
+                        style: TextStyle(color: sch.textDim, fontSize: 11),
                       ),
                       const SizedBox(width: 6),
                       Icon(
                         _expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                        color: _kTextDim, size: 16,
+                        color: sch.textDim, size: 16,
                       ),
                     ],
                   ),
@@ -1171,17 +1162,17 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
                       children: [
                         _MiniChip(
                           label: isAc ? '~220В' : '${battery ?? '—'}%',
-                          color: _batteryColor(isAc, battery),
+                          color: _batteryColor(sch, isAc, battery),
                         ),
                         if (gsmSignal != null)
                           _MiniChip(
                             label: 'GSM $gsmBars/5',
-                            color: _gsmColor(gsmBars),
+                            color: _gsmColor(sch, gsmBars),
                           ),
                         if (simBalance != null)
                           _MiniChip(
                             label: '${simBalance.toStringAsFixed(0)} ₽',
-                            color: simBalance < 50 ? _kRed : _kTextDim,
+                            color: simBalance < 50 ? kRed : sch.textDim,
                           ),
                       ],
                     ),
@@ -1192,7 +1183,7 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
           ),
 
           if (_expanded && widget.sensors.isNotEmpty) ...[
-            Container(height: 1, color: _kBorder),
+            Container(height: 1, color: AppColors.of(context).border),
             ...widget.sensors.mapIndexed((i, sensor) => _SensorRow(
               sensor: sensor,
               repo: widget.repo,
@@ -1207,7 +1198,7 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
               child: Text(
                 'Нет датчиков',
-                style: const TextStyle(color: _kTextDim, fontSize: 12),
+                style: TextStyle(color: sch.textDim, fontSize: 12),
               ),
             ),
 
@@ -1267,21 +1258,22 @@ class _SensorRowState extends State<_SensorRow> {
     } catch (_) {}
   }
 
-  Color _batteryColor(bool isAc, int? level) {
-    if (isAc) return _kGreen;
-    if (level == null) return _kTextDim;
-    if (level >= 50) return _kGreen;
-    if (level >= 25) return _kOrange;
-    return _kRed;
+  Color _batteryColor(AppScheme sch, bool isAc, int? level) {
+    if (isAc) return kGreen;
+    if (level == null) return sch.textDim;
+    if (level >= 50) return kGreen;
+    if (level >= 25) return kOrange;
+    return kRed;
   }
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     final sensor = widget.sensor;
     final stateColor = switch (sensor.state) {
-      SensorState.normal   => _kGreen,
-      SensorState.warning  => _kOrange,
-      SensorState.critical => _kRed,
+      SensorState.normal   => kGreen,
+      SensorState.warning  => kOrange,
+      SensorState.critical => kRed,
     };
 
     return GestureDetector(
@@ -1291,7 +1283,7 @@ class _SensorRowState extends State<_SensorRow> {
         decoration: BoxDecoration(
           border: widget.isLast
               ? null
-              : const Border(bottom: BorderSide(color: _kBorder)),
+              : Border(bottom: BorderSide(color: sch.border)),
         ),
         child: Row(
           children: [
@@ -1313,8 +1305,8 @@ class _SensorRowState extends State<_SensorRow> {
                 children: [
                   Text(
                     sensor.name,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: sch.textMain,
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
@@ -1327,23 +1319,23 @@ class _SensorRowState extends State<_SensorRow> {
                       _temp != null
                           ? Text(
                               '${_temp!.toStringAsFixed(1)}°C',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: _kAccent,
+                                color: sch.accent,
                                 fontWeight: FontWeight.w600,
                               ),
                             )
-                          : const SizedBox(
+                          : SizedBox(
                               width: 14, height: 14,
                               child: CircularProgressIndicator(
-                                  color: _kAccent, strokeWidth: 1.5),
+                                  color: sch.accent, strokeWidth: 1.5),
                             ),
                       _hum != null
                           ? Text(
                               '${_hum!.toStringAsFixed(1)}%',
                               style: const TextStyle(
                                 fontSize: 12,
-                                color: _kCyan,
+                                color: kCyan,
                                 fontWeight: FontWeight.w600,
                               ),
                             )
@@ -1352,7 +1344,7 @@ class _SensorRowState extends State<_SensorRow> {
                         label: sensor.isAcPowered
                             ? '~220В'
                             : '${sensor.batteryLevel ?? '—'}%',
-                        color: _batteryColor(sensor.isAcPowered, sensor.batteryLevel),
+                        color: _batteryColor(sch, sensor.isAcPowered, sensor.batteryLevel),
                       ),
                     ],
                   ),
@@ -1360,7 +1352,7 @@ class _SensorRowState extends State<_SensorRow> {
               ),
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.chevron_right, color: _kTextDim, size: 18),
+            Icon(Icons.chevron_right, color: sch.textDim, size: 18),
           ],
         ),
       ),
@@ -1395,18 +1387,19 @@ class _LiveReadingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: _kCard2,
+        color: sch.card2,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _kBorder),
+        border: Border.all(color: sch.border),
       ),
       child: loading
           ? const SizedBox(
               height: 48,
               child: Center(
-                child: CircularProgressIndicator(color: _kCyan, strokeWidth: 2),
+                child: CircularProgressIndicator(color: kCyan, strokeWidth: 2),
               ),
             )
           : Column(
@@ -1414,11 +1407,11 @@ class _LiveReadingsCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Text(
+                    Text(
                       'ТЕКУЩИЕ ПОКАЗАНИЯ',
                       style: TextStyle(
                         fontSize: 10,
-                        color: _kTextDim,
+                        color: sch.textDim,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.8,
                       ),
@@ -1431,10 +1424,10 @@ class _LiveReadingsCard extends StatelessWidget {
                           width: 6, height: 6,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: isOnline ? _kGreen : _kTextDim,
+                            color: isOnline ? kGreen : sch.textDim,
                             boxShadow: isOnline
                                 ? [BoxShadow(
-                                    color: _kGreen.withOpacity(0.5),
+                                    color: kGreen.withOpacity(0.5),
                                     blurRadius: 4)]
                                 : null,
                           ),
@@ -1442,8 +1435,8 @@ class _LiveReadingsCard extends StatelessWidget {
                         const SizedBox(width: 4),
                         Text(
                           'обн. ${_fmtTime(timestamp)}',
-                          style: const TextStyle(
-                              fontSize: 10, color: _kTextDim),
+                          style: TextStyle(
+                              fontSize: 10, color: sch.textDim),
                         ),
                       ],
                     ),
@@ -1451,9 +1444,9 @@ class _LiveReadingsCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 if (temp == null && hum == null)
-                  const Text(
+                  Text(
                     'Нет данных от датчика',
-                    style: TextStyle(color: _kTextDim, fontSize: 12),
+                    style: TextStyle(color: sch.textDim, fontSize: 12),
                   )
                 else
                   Row(
@@ -1464,31 +1457,31 @@ class _LiveReadingsCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               vertical: 10, horizontal: 12),
                           decoration: BoxDecoration(
-                            color: _kAccent.withOpacity(0.08),
+                            color: sch.accent.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                                color: _kAccent.withOpacity(0.25)),
+                                color: sch.accent.withOpacity(0.25)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(children: [
-                                const Icon(Icons.thermostat_outlined,
-                                    color: _kAccent, size: 13),
+                                Icon(Icons.thermostat_outlined,
+                                    color: sch.accent, size: 13),
                                 const SizedBox(width: 4),
-                                const Text('Температура',
+                                Text('Температура',
                                     style: TextStyle(
-                                        fontSize: 10, color: _kTextDim)),
+                                        fontSize: 10, color: sch.textDim)),
                               ]),
                               const SizedBox(height: 6),
                               Text(
                                 temp != null
                                     ? '${temp!.toStringAsFixed(1)} °C'
                                     : '—',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w800,
-                                  color: _kAccent,
+                                  color: sch.accent,
                                   letterSpacing: -0.5,
                                 ),
                               ),
@@ -1503,21 +1496,21 @@ class _LiveReadingsCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               vertical: 10, horizontal: 12),
                           decoration: BoxDecoration(
-                            color: _kCyan.withOpacity(0.08),
+                            color: kCyan.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                                color: _kCyan.withOpacity(0.25)),
+                                color: kCyan.withOpacity(0.25)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(children: [
                                 const Icon(Icons.water_drop_outlined,
-                                    color: _kCyan, size: 13),
+                                    color: kCyan, size: 13),
                                 const SizedBox(width: 4),
-                                const Text('Влажность',
+                                Text('Влажность',
                                     style: TextStyle(
-                                        fontSize: 10, color: _kTextDim)),
+                                        fontSize: 10, color: sch.textDim)),
                               ]),
                               const SizedBox(height: 6),
                               Text(
@@ -1527,7 +1520,7 @@ class _LiveReadingsCard extends StatelessWidget {
                                 style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w800,
-                                  color: _kCyan,
+                                  color: kCyan,
                                   letterSpacing: -0.5,
                                 ),
                               ),
@@ -1551,23 +1544,24 @@ class _HardwareStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: _kCard2,
+        color: sch.card2,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _kBorder),
+        border: Border.all(color: sch.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Text(
+              Text(
                 'ГОЛОВНОЙ БЛОК',
                 style: TextStyle(
                   fontSize: 10,
-                  color: _kTextDim,
+                  color: sch.textDim,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.8,
                 ),
@@ -1576,12 +1570,12 @@ class _HardwareStatusCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: sensor.isOnline ? _kGreenBg : _kRedBg,
+                  color: sensor.isOnline ? sch.greenBg : sch.redBg,
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(
                     color: sensor.isOnline
-                        ? _kGreen.withOpacity(0.35)
-                        : _kRed.withOpacity(0.35),
+                        ? kGreen.withOpacity(0.35)
+                        : kRed.withOpacity(0.35),
                   ),
                 ),
                 child: Text(
@@ -1589,7 +1583,7 @@ class _HardwareStatusCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: sensor.isOnline ? _kGreen : _kRed,
+                    color: sensor.isOnline ? kGreen : kRed,
                   ),
                 ),
               ),
@@ -1612,12 +1606,12 @@ class _PowerCol extends StatelessWidget {
     final isAc = sensor.isAcPowered;
     final battery = sensor.batteryLevel;
     final color = isAc
-        ? _kGreen
+        ? kGreen
         : (battery != null && battery < 25
-            ? _kRed
+            ? kRed
             : battery != null && battery < 50
-                ? _kOrange
-                : _kGreen);
+                ? kOrange
+                : kGreen);
     final value = isAc ? 'Сеть 220В' : (battery != null ? '$battery%' : '—');
 
     return _StatCol(
@@ -1638,14 +1632,14 @@ class _GsmCol extends StatelessWidget {
     final bars = sensor.gsmBars;
     final hasSignal = sensor.gsmSignal != null;
     final color = bars >= 4
-        ? _kGreen
+        ? kGreen
         : bars == 3
-            ? _kGreen
+            ? kGreen
             : bars == 2
-                ? _kOrange
+                ? kOrange
                 : bars == 1
-                    ? _kRed
-                    : _kTextDim;
+                    ? kRed
+                    : AppColors.of(context).textDim;
 
     return _StatCol(
       label: 'GSM',
@@ -1664,12 +1658,12 @@ class _SimCol extends StatelessWidget {
   Widget build(BuildContext context) {
     final balance = sensor.simBalance;
     final color = balance == null
-        ? _kTextDim
+        ? AppColors.of(context).textDim
         : balance < 50
-            ? _kRed
+            ? kRed
             : balance < 150
-                ? _kOrange
-                : _kGreen;
+                ? kOrange
+                : kGreen;
 
     return _StatCol(
       label: 'SIM',
@@ -1700,9 +1694,9 @@ class _StatCol extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 9,
-              color: _kTextDim,
+              color: AppColors.of(context).textDim,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.6,
             ),
@@ -1735,7 +1729,7 @@ class _BatteryBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = level < 25 ? _kRed : level < 50 ? _kOrange : _kGreen;
+    final color = level < 25 ? kRed : level < 50 ? kOrange : kGreen;
     return SizedBox(
       width: 44,
       child: Stack(
@@ -1743,7 +1737,7 @@ class _BatteryBar extends StatelessWidget {
           Container(
             height: 5,
             decoration: BoxDecoration(
-              color: _kBorder,
+              color: AppColors.of(context).border,
               borderRadius: BorderRadius.circular(3),
             ),
           ),
@@ -1769,7 +1763,7 @@ class _GsmBars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = bars >= 4 ? _kGreen : bars == 3 ? _kGreen : bars == 2 ? _kOrange : _kRed;
+    final color = bars >= 4 ? kGreen : bars == 3 ? kGreen : bars == 2 ? kOrange : kRed;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       spacing: 2,
@@ -1779,7 +1773,7 @@ class _GsmBars extends StatelessWidget {
           width: 4,
           height: 3.0 + i * 2.5,
           decoration: BoxDecoration(
-            color: filled ? color : _kBorder,
+            color: filled ? color : AppColors.of(context).border,
             borderRadius: BorderRadius.circular(1),
           ),
         );
@@ -1816,11 +1810,12 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     return Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 10,
-        color: _kTextDim,
+        color: sch.textDim,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.8,
       ),
@@ -1843,9 +1838,9 @@ class _StatCell extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 9,
-              color: _kTextDim,
+              color: AppColors.of(context).textDim,
               letterSpacing: 0.4,
             )),
         const SizedBox(height: 3),
@@ -1860,7 +1855,7 @@ class _StatCell extends StatelessWidget {
 class _VertDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
-      Container(width: 1, height: 22, color: const Color(0xFF19282B));
+      Container(width: 1, height: 22, color: AppColors.of(context).border);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1881,17 +1876,17 @@ class _PeriodTabs extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: active ? _kCyan.withOpacity(0.15) : _kCard2,
+              color: active ? kCyan.withOpacity(0.15) : AppColors.of(context).card2,
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                color: active ? _kCyan.withOpacity(0.5) : _kBorder,
+                color: active ? kCyan.withOpacity(0.5) : AppColors.of(context).border,
               ),
             ),
             child: Text(
               p,
               style: TextStyle(
                 fontSize: 12,
-                color: active ? _kCyan : _kTextDim,
+                color: active ? kCyan : AppColors.of(context).textDim,
                 fontWeight: active ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
@@ -1921,17 +1916,17 @@ class _ChartToggleBtn extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.15) : _kCard2,
+          color: selected ? color.withOpacity(0.15) : AppColors.of(context).card2,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: selected ? color.withOpacity(0.5) : _kBorder,
+            color: selected ? color.withOpacity(0.5) : AppColors.of(context).border,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12,
-            color: selected ? color : _kTextDim,
+            color: selected ? color : AppColors.of(context).textDim,
             fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
@@ -2020,11 +2015,8 @@ class _DarkDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenH = MediaQuery.of(context).size.height;
 
-    return Theme(
-      data: ThemeData.dark().copyWith(
-        colorScheme: Theme.of(context).colorScheme,
-      ),
-      child: Dialog(
+    final sch = AppColors.of(context);
+    return Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
         child: Container(
@@ -2032,7 +2024,7 @@ class _DarkDialog extends StatelessWidget {
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _kBorder),
+            border: Border.all(color: sch.border),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -2045,8 +2037,8 @@ class _DarkDialog extends StatelessWidget {
                     Expanded(
                       child: Text(
                         title,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: sch.textMain,
                           fontWeight: FontWeight.w700,
                           fontSize: 17,
                         ),
@@ -2058,17 +2050,17 @@ class _DarkDialog extends StatelessWidget {
                       child: Container(
                         width: 32, height: 32,
                         decoration: BoxDecoration(
-                          color: _kCard2,
+                          color: sch.card2,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.close,
-                            color: _kTextDim, size: 16),
+                        child: Icon(Icons.close,
+                            color: sch.textDim, size: 16),
                       ),
                     ),
                   ],
                 ),
               ),
-              const Divider(height: 1, color: _kBorder),
+              Divider(height: 1, color: sch.border),
 
               // ── Контент (скроллируемый) ───────────────────────────────────
               Flexible(
@@ -2080,7 +2072,7 @@ class _DarkDialog extends StatelessWidget {
 
               // ── Кнопки действий ───────────────────────────────────────────
               if (actions.isNotEmpty) ...[
-                const Divider(height: 1, color: _kBorder),
+                Divider(height: 1, color: sch.border),
                 Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 10),
@@ -2094,7 +2086,6 @@ class _DarkDialog extends StatelessWidget {
             ],
           ),
         ),
-      ),
     );
   }
 }
@@ -2115,31 +2106,32 @@ class _DarkField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       readOnly: readOnly,
       style: TextStyle(
-        color: readOnly ? _kTextDim : Colors.white,
+        color: readOnly ? sch.textDim : sch.textMain,
         fontSize: 14,
       ),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        labelStyle: const TextStyle(color: _kTextDim, fontSize: 13),
-        hintStyle: const TextStyle(color: _kTextDim, fontSize: 12),
+        labelStyle: TextStyle(color: sch.textDim, fontSize: 13),
+        hintStyle: TextStyle(color: sch.textDim, fontSize: 12),
         filled: readOnly,
-        fillColor: readOnly ? const Color(0xFF0A1516) : null,
+        fillColor: readOnly ? sch.card2 : null,
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(
-            color: readOnly ? _kBorder.withOpacity(0.5) : _kBorder,
+            color: readOnly ? sch.border.withOpacity(0.5) : sch.border,
           ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(
-            color: readOnly ? _kBorder.withOpacity(0.5) : _kCyan,
+            color: readOnly ? sch.border.withOpacity(0.5) : kCyan,
           ),
         ),
         isDense: true,
@@ -2164,20 +2156,21 @@ class _DarkDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     return DropdownButtonFormField<T>(
       value: value,
       dropdownColor: Theme.of(context).colorScheme.surface,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
+      style: TextStyle(color: sch.textMain, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: _kTextDim, fontSize: 13),
+        labelStyle: TextStyle(color: sch.textDim, fontSize: 13),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _kBorder),
+          borderSide: BorderSide(color: sch.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _kCyan),
+          borderSide: const BorderSide(color: kCyan),
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -2195,9 +2188,10 @@ class _DarkTextButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     return TextButton(
       onPressed: onTap,
-      child: Text(label, style: const TextStyle(color: _kTextDim, fontSize: 13)),
+      child: Text(label, style: TextStyle(color: sch.textDim, fontSize: 13)),
     );
   }
 }
@@ -2211,7 +2205,7 @@ class _DarkFilledButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return FilledButton(
       style: FilledButton.styleFrom(
-        backgroundColor: _kCyan,
+        backgroundColor: kCyan,
         foregroundColor: Colors.black,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),

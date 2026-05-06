@@ -95,6 +95,7 @@ class _RootPageState extends State<RootPage> { // класс для состоя
     ];
 
     final isDark   = widget.isDark; // признак темной темы
+    final accent   = isDark ? kAccent : kAccentDark;
     final navBg    = isDark ? const Color(0xFF0E0E0E) : Colors.white; // цвет фона навигации
     final appBarBg = isDark ? const Color(0xFF0A0A0A) : Colors.white; // цвет фона AppBar
 
@@ -103,10 +104,10 @@ class _RootPageState extends State<RootPage> { // класс для состоя
       appBar: AppBar(
         backgroundColor: appBarBg, // цвет фона AppBar
         elevation: 0,
-        title: const Text(
+        title: Text(
           'TEMPERATURA.KZ',
           style: TextStyle(
-            color: Color(0xFFFFD550),
+            color: accent,
             fontWeight: FontWeight.w700,
             fontSize: 16,
             letterSpacing: 0.5,
@@ -132,8 +133,8 @@ class _RootPageState extends State<RootPage> { // класс для состоя
             child: Center(
               child: Text(
                 repo.role.name,
-                style: const TextStyle(
-                  color: Color(0xFFFFD550),
+                style: TextStyle(
+                  color: accent,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -143,8 +144,8 @@ class _RootPageState extends State<RootPage> { // класс для состоя
         ],
       ),
       body: loading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFFFD550))) // индикатор загрузки
+          ? Center(
+              child: CircularProgressIndicator(color: accent)) // индикатор загрузки
           : Column(
               children: [
                 if (error != null)
@@ -165,42 +166,38 @@ class _RootPageState extends State<RootPage> { // класс для состоя
       bottomNavigationBar: NavigationBar( // навигация
         backgroundColor: navBg, // цвет фона навигации
         surfaceTintColor: Colors.transparent,
-        indicatorColor: const Color(0xFFFFD550).withOpacity(0.18), // цвет индикатора
+        indicatorColor: accent.withOpacity(0.18), // цвет индикатора
         selectedIndex: tab,
         onDestinationSelected: (v) => setState(() => tab = v), // функция для выбора пункта навигации
         destinations: [
           NavigationDestination(
             icon: Icon(Icons.home_outlined, // иконка для главного экрана
                 color: isDark ? Colors.white38 : Colors.black38),
-            selectedIcon: const Icon(Icons.home, color: Color(0xFFFFD550)),
+            selectedIcon: Icon(Icons.home, color: accent),
             label: 'Главная',
           ),
           NavigationDestination(
             icon: Icon(Icons.sensors_outlined, // иконка для экрана датчиков
                 color: isDark ? Colors.white38 : Colors.black38),
-            selectedIcon:
-                const Icon(Icons.sensors, color: Color(0xFFFFD550)),
+            selectedIcon: Icon(Icons.sensors, color: accent),
             label: 'Датчики',
           ),
           NavigationDestination(
             icon: Icon(Icons.bar_chart_outlined, // иконка для экрана отчетов
                 color: isDark ? Colors.white38 : Colors.black38),
-            selectedIcon:
-                const Icon(Icons.bar_chart, color: Color(0xFFFFD550)),
+            selectedIcon: Icon(Icons.bar_chart, color: accent),
             label: 'Отчёты',
           ),
           NavigationDestination(
             icon: Icon(Icons.notifications_outlined, // иконка для экрана уведомлений
                 color: isDark ? Colors.white38 : Colors.black38),
-            selectedIcon: const Icon(Icons.notifications,
-                color: Color(0xFFFFD550)),
+            selectedIcon: Icon(Icons.notifications, color: accent),
             label: 'Увед.',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined, // иконка для экрана настроек
                 color: isDark ? Colors.white38 : Colors.black38),
-            selectedIcon:
-                const Icon(Icons.settings, color: Color(0xFFFFD550)),
+            selectedIcon: Icon(Icons.settings, color: accent),
             label: 'Настройки',
           ),
         ],
