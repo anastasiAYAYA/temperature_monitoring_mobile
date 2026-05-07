@@ -19,10 +19,8 @@ extension _SortOrderLabel on _SortOrder {
 }
 
 /// Журнал событий (алармы): фильтр по статусу, сортировка, для admin — выбор компании.
-///
 /// Связь с сущностями: `AlarmModel.sensorId` сопоставляется с датчиками локации через [AppRepository.sensors].
 /// Изменение статуса: `repo.updateAlarm` (PATCH), затем [onRefresh] для синхронизации с сервером.
-///
 /// `_mutedLocationIds` хранится только в памяти клиента — заглушка до API отключения уведомлений.
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({

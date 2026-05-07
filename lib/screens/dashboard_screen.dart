@@ -471,8 +471,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildCompanyContent(AppScheme c, dynamic currentLocation) {
     final sensors = _sensorsForCurrentLocation;
-    // Внимание на защите: сейчас берутся первые 5 тревог из общего списка репозитория без фильтра по компании.
-    final alarms = widget.repo.alarms.take(5).toList();
+    // Фильтруем тревоги только по датчикам текущей локации.
+    final locationSensorIds = sensors.map((s) => s.id).toSet();
+    final alarms = widget.repo.alarms
+        .where((a) => a.sensorId != null && locationSensorIds.contains(a.sensorId))
+        .take(5)
+        .toList();
 
     return Container(
       color: c.bg,
@@ -516,8 +520,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final locations = widget.repo.locations;
     final currentLocation = locations.isNotEmpty ? locations[_selectedLocationIndex] : null;
     final sensors = _sensorsForCurrentLocation;
-    // См. комментарий в [_buildCompanyContent] — тот же список последних тревог глобально.
-    final alarms = widget.repo.alarms.take(5).toList();
+    // Фильтруем тревоги только по датчикам текущей локации.
+    final locationSensorIds = sensors.map((s) => s.id).toSet();
+    final alarms = widget.repo.alarms
+        .where((a) => a.sensorId != null && locationSensorIds.contains(a.sensorId))
+        .take(5)
+        .toList();
 
     return Container(
       color: c.bg,

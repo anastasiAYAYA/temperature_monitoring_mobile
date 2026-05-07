@@ -1,8 +1,9 @@
 import 'dart:convert';
+import 'dart:io'; // Работа с файловой системой на мобильном
 
 import 'package:flutter/material.dart';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html show AnchorElement, Blob, Url;
+import 'package:open_filex/open_filex.dart';     // Открытие файла сторонним приложением
+import 'package:path_provider/path_provider.dart'; // Получение пути временного каталога
 
 import '../models/sensor_model.dart';
 import '../services/app_repository.dart';
@@ -53,7 +54,8 @@ const Map<String, int> _kHistoryLimit = {
 enum _ReportTarget { sensor, location }
 
 /// Отчёты и превью: история через `GET .../telemetry/{id}/history?limit=...` (см. [_fetchSensorPoints]),
-/// файл — `downloadReportByPeriod` / `downloadLocationReportByPeriod`. На web скачивание через `dart:html`.
+/// файл — `downloadReportByPeriod` / `downloadLocationReportByPeriod`. На мобильном файл сохраняется
+/// во временный каталог через `path_provider` и открывается через `open_file`.
 ///
 /// Режим «локация»: для каждого датчика группы запрашивается история, затем покомпонентное усреднение
 /// по минимальной длине рядов ([_loadLocationChart]) — упрощённая агрегация для дипломного прототипа.
@@ -255,16 +257,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Future<void> _saveAndOpen(List<int> bytes, String fileName) async {
     try {
-      // На вебе скачиваем через браузер
-      final blob = html.Blob([bytes]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      html.AnchorElement(href: url)
-        ..setAttribute('download', fileName)
-        ..click();
-      html.Url.revokeObjectUrl(url);
-      if (mounted) _snack('Файл скачан: $fileName');
+      // Сохраняем файл во временный каталог приложения и открываем его
+      // сторонним приложением (просмотрщик PDF, Excel, и т.д.)
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$fileName');
+      await file.writeAsBytes(bytes, flush: true);
+      final result = await OpenFilex.open(file.path);
+      if (!mounted) return;
+      if (result.type != ResultType.done) {
+        _snack('Не удалось открыть файл: ${result.message}');
+      } else {
+        _snack('Файл сохранён: $fileName');
+      }
     } catch (e) {
-      if (mounted) _snack('Ошибка скачивания: $e');
+      if (mounted) _snack('Ошибка сохранения: $e');
     }
   }
 
