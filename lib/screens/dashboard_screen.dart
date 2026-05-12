@@ -11,11 +11,22 @@ import '../widgets/sensor_dot.dart';
 
 /// Координаты датчиков на плане хранятся как **доли ширины/высоты** (0…1) и переводятся
 /// в пиксели умножением на размер области схемы — см. [_SchemaViewport], [_onSensorPanUpdate].
+
+part 'dashboard/dashboard_company_widgets.dart';
+part 'dashboard/dashboard_sensor_row.dart';
+part 'dashboard/dashboard_chart_widgets.dart';
+part 'dashboard/dashboard_dialog_widgets.dart';
+part 'dashboard/dashboard_schema_widgets.dart';
+
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen(
-      {super.key, required this.repo, required this.onRefresh});
+  const DashboardScreen({
+    super.key,
+    required this.repo,
+    required this.onRefresh,
+  });
 
   final AppRepository repo;
+
   /// Вызывается после создания локации / загрузки плана — перезагружает кеш в родителе.
   final Future<void> Function() onRefresh;
 
@@ -50,12 +61,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void dispose() {
     _transformCtrl.dispose();
     _searchCtrl.dispose();
+    // Снимаем колбэк позиций чтобы не вызывать setState после уничтожения виджета
+    widget.repo.clearPositionCallback();
     super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
+    // Регистрируем колбэк позиций: при WS-событии sensor_position обновляем маркер на схеме.
+    // FIX: используем setPositionCallback — так мнемосхема мгновенно реагирует на правки
+    // другого клиента (например, веб-интерфейса) без рефетча всего списка датчиков.
+    widget.repo.setPositionCallback((sensorId, posX, posY, groupId) {
+      if (!mounted) return;
+      // Фильтр по группе: если groupId передан и не совпадает с открытой локацией — игнорируем.
+      final currentLocId = _isAdmin
+          ? _adminSelectedLocationId
+          : (widget.repo.locations.isNotEmpty
+                ? widget.repo.locations[_selectedLocationIndex].id
+                : null);
+      if (groupId != null && currentLocId != null && groupId != currentLocId)
+        return;
+      setState(
+        () {},
+      ); // позиции уже обновлены в кеше репозитория — просто перерисовываем
+    });
     // Sparkline строится из repo.loadHistory — вызываем после первого кадра, когда контекст готов.
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadCharts());
   }
@@ -111,8 +141,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(width: 8),
                     IconButton(
                       icon: Icon(Icons.close, color: c.red, size: 20),
-                      onPressed: () =>
-                          setDialogState(() => pickedFile = null),
+                      onPressed: () => setDialogState(() => pickedFile = null),
                     ),
                   ],
                 ],
@@ -120,8 +149,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               if (pickedFile == null)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
-                  child: Text('JPG, PNG или SVG, до 50 МБ',
-                      style: TextStyle(fontSize: 11, color: c.textDim)),
+                  child: Text(
+                    'JPG, PNG или SVG, до 50 МБ',
+                    style: TextStyle(fontSize: 11, color: c.textDim),
+                  ),
                 ),
             ],
           ),
@@ -133,15 +164,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final name = nameCtrl.text.trim();
                 if (name.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Введите название компании')));
+                    const SnackBar(content: Text('Введите название компании')),
+                  );
                   return;
                 }
                 final createErr = await widget.repo.createLocation(name: name);
                 if (!context.mounted) return;
                 if (createErr != null) {
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text(createErr)));
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(createErr)));
                   return;
                 }
                 if (pickedFile != null) {
@@ -159,18 +192,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     );
                     if (!context.mounted) return;
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(uploadErr == null
-                          ? 'Компания создана с планом'
-                          : 'Компания создана, план не загрузился: $uploadErr'),
-                    ));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          uploadErr == null
+                              ? 'Компания создана с планом'
+                              : 'Компания создана, план не загрузился: $uploadErr',
+                        ),
+                      ),
+                    );
                     await widget.onRefresh();
                     return;
                   }
                 }
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Компания создана')));
+                  const SnackBar(content: Text('Компания создана')),
+                );
                 await widget.onRefresh();
               },
             ),
@@ -180,7 +218,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Future<void> _showUploadPlanDialog(int locationId, String locationName) async {
+  Future<void> _showUploadPlanDialog(
+    int locationId,
+    String locationName,
+  ) async {
     PlatformFile? pickedFile;
     await showDialog<void>(
       context: context,
@@ -209,8 +250,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 },
               ),
               const SizedBox(height: 4),
-              Text('JPG, PNG или SVG, до 50 МБ',
-                  style: TextStyle(fontSize: 11, color: c.textDim)),
+              Text(
+                'JPG, PNG или SVG, до 50 МБ',
+                style: TextStyle(fontSize: 11, color: c.textDim),
+              ),
             ],
           ),
           actions: [
@@ -229,7 +272,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       if (!context.mounted) return;
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(err ?? 'План загружен')));
+                        SnackBar(content: Text(err ?? 'План загружен')),
+                      );
                       if (err == null) await widget.onRefresh();
                     },
             ),
@@ -296,6 +340,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   /// PATCH координат только для датчиков, сдвинутых заметно относительно снимка [_draftPositions].
+  /// По инструкции: использует PATCH /sensors/{id}/position (только admin).
+  /// При любой ошибке (в т.ч. 403) откатывает координаты к снимку [_draftPositions].
   Future<void> _confirmEditMode() async {
     final changed = widget.repo.sensors.where((s) {
       final orig = _draftPositions[s.id];
@@ -304,47 +350,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }).toList();
 
     setState(() => _editMode = false);
-    _draftPositions.clear();
-    if (changed.isEmpty) return;
+    if (changed.isEmpty) {
+      _draftPositions.clear();
+      return;
+    }
 
     final errors = <String>[];
+    bool anyForbidden = false;
     for (final s in changed) {
       final err = await widget.repo.updateSensorPosition(
-        sensorId: s.id, posX: s.x, posY: s.y,
+        sensorId: s.id,
+        posX: s.x,
+        posY: s.y,
       );
-      if (err != null) errors.add('${s.name}: $err');
+      if (err != null) {
+        errors.add('${s.name}: $err');
+        // FIX: при ошибке (в т.ч. 403) откатываем позицию к серверной из снимка.
+        // Не оставляем локальные координаты без подтверждения сервером (чеклист п.5).
+        final orig = _draftPositions[s.id];
+        if (orig != null) {
+          setState(() {
+            s.x = orig.$1;
+            s.y = orig.$2;
+          });
+        }
+        if (err.contains('403') || err.contains('прав')) anyForbidden = true;
+      }
     }
+    _draftPositions.clear();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(errors.isEmpty
-          ? (changed.length == 1 ? 'Позиция датчика сохранена' : 'Позиции ${changed.length} датчиков сохранены')
-          : 'Ошибки: ${errors.join(', ')}'),
-    ));
+
+    final msg = errors.isEmpty
+        ? (changed.length == 1
+              ? 'Позиция датчика сохранена'
+              : 'Позиции ${changed.length} датчиков сохранены')
+        : anyForbidden
+        ? 'Нет прав на изменение позиций. Координаты возвращены к серверным.'
+        : 'Ошибки при сохранении: ${errors.join(', ')}';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   /// API может вернуть относительный `image_url` — склеиваем с origin без суффикса `/api/v1`.
   String _resolveImageUrl(String imageUrl, String baseUrl) {
-    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) return imageUrl;
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))
+      return imageUrl;
     return '${baseUrl.replaceAll(RegExp(r'/api/v\d+$'), '')}$imageUrl';
   }
 
   Color _alarmColor(AlarmStatus s) => switch (s) {
-        AlarmStatus.newAlarm     => c.red,
-        AlarmStatus.acknowledged => c.orange,
-        AlarmStatus.resolved     => c.green,
-      };
+    AlarmStatus.newAlarm => c.red,
+    AlarmStatus.acknowledged => c.orange,
+    AlarmStatus.resolved => c.green,
+  };
 
   String _alarmLabel(AlarmStatus s) => switch (s) {
-        AlarmStatus.newAlarm     => 'НОВОЕ',
-        AlarmStatus.acknowledged => 'В РАБОТЕ',
-        AlarmStatus.resolved     => 'РЕШЕНО',
-      };
+    AlarmStatus.newAlarm => 'НОВОЕ',
+    AlarmStatus.acknowledged => 'В РАБОТЕ',
+    AlarmStatus.resolved => 'РЕШЕНО',
+  };
 
   Color _alarmBg(AlarmStatus s) => switch (s) {
-        AlarmStatus.newAlarm     => c.redBg,
-        AlarmStatus.acknowledged => c.isDark ? const Color(0xFF2A1E00) : const Color(0xFFFFF3E0),
-        AlarmStatus.resolved     => c.isDark ? const Color(0xFF0E2A1E) : const Color(0xFFE8F5E9),
-      };
+    AlarmStatus.newAlarm => c.redBg,
+    AlarmStatus.acknowledged =>
+      c.isDark ? const Color(0xFF2A1E00) : const Color(0xFFFFF3E0),
+    AlarmStatus.resolved =>
+      c.isDark ? const Color(0xFF0E2A1E) : const Color(0xFFE8F5E9),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -357,12 +428,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final locations = widget.repo.locations;
     final filtered = _searchQuery.isEmpty
         ? locations
-        : locations.where((l) => l.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+        : locations
+              .where(
+                (l) =>
+                    l.name.toLowerCase().contains(_searchQuery.toLowerCase()),
+              )
+              .toList();
     final sorted = List.of(filtered)
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     if (_adminSelectedLocationId != null) {
-      final loc = locations.where((l) => l.id == _adminSelectedLocationId).firstOrNull;
+      final loc = locations
+          .where((l) => l.id == _adminSelectedLocationId)
+          .firstOrNull;
       return _buildCompanyContent(c, loc);
     }
 
@@ -376,20 +454,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: Text('Компании',
-                      style: TextStyle(color: c.textMain, fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 0.2)),
+                  child: Text(
+                    'Компании',
+                    style: TextStyle(
+                      color: c.textMain,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
                 ),
                 GestureDetector(
                   onTap: _showCreateLocationDialog,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: c.yellowBg,
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(color: c.accent.withOpacity(0.5)),
                     ),
-                    child: Text('+ Компания',
-                        style: TextStyle(color: c.accent, fontSize: 12, fontWeight: FontWeight.w700)),
+                    child: Text(
+                      '+ Компания',
+                      style: TextStyle(
+                        color: c.accent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -408,27 +502,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 prefixIcon: Icon(Icons.search, color: c.textDim, size: 18),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? GestureDetector(
-                        onTap: () { _searchCtrl.clear(); setState(() => _searchQuery = ''); },
+                        onTap: () {
+                          _searchCtrl.clear();
+                          setState(() => _searchQuery = '');
+                        },
                         child: Icon(Icons.close, color: c.textDim, size: 16),
                       )
                     : null,
                 filled: true,
                 fillColor: c.card,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.cyan)),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: c.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: c.cyan),
+                ),
               ),
             ),
           ),
           const SizedBox(height: 8),
           Expanded(
             child: sorted.isEmpty
-                ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.business_outlined, size: 48, color: c.textDim),
-                    const SizedBox(height: 12),
-                    Text(_searchQuery.isNotEmpty ? 'Компании не найдены' : 'Нет компаний\nНажмите «+ Компания» чтобы создать',
-                        style: TextStyle(color: c.textDim, fontSize: 13), textAlign: TextAlign.center),
-                  ]))
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.business_outlined,
+                          size: 48,
+                          color: c.textDim,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _searchQuery.isNotEmpty
+                              ? 'Компании не найдены'
+                              : 'Нет компаний\nНажмите «+ Компания» чтобы создать',
+                          style: TextStyle(color: c.textDim, fontSize: 13),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
                 : _buildAlphaList(c, sorted),
           ),
         ],
@@ -455,14 +575,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.only(top: 10, bottom: 4),
-              child: Text(letter, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: c.textDim, letterSpacing: 1.5)),
+              child: Text(
+                letter,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: c.textDim,
+                  letterSpacing: 1.5,
+                ),
+              ),
             ),
-            ...items.map((loc) => _CompanyTile(
-                  name: loc.name,
-                  sensorCount: widget.repo.sensors.where((s) => s.groupId == loc.id).length,
-                  onTap: () { setState(() { _adminSelectedLocationId = loc.id as int; _editMode = false; }); _loadCharts(); },
-                  c: c,
-                )),
+            ...items.map(
+              (loc) => _CompanyTile(
+                name: loc.name,
+                sensorCount: widget.repo.sensors
+                    .where((s) => s.groupId == loc.id)
+                    .length,
+                onTap: () {
+                  setState(() {
+                    _adminSelectedLocationId = loc.id as int;
+                    _editMode = false;
+                  });
+                  _loadCharts();
+                },
+                c: c,
+              ),
+            ),
           ],
         );
       },
@@ -474,7 +612,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Фильтруем тревоги только по датчикам текущей локации.
     final locationSensorIds = sensors.map((s) => s.id).toSet();
     final alarms = widget.repo.alarms
-        .where((a) => a.sensorId != null && locationSensorIds.contains(a.sensorId))
+        .where(
+          (a) => a.sensorId != null && locationSensorIds.contains(a.sensorId),
+        )
         .take(5)
         .toList();
 
@@ -486,15 +626,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             children: [
               GestureDetector(
-                onTap: () => setState(() { _adminSelectedLocationId = null; _editMode = false; }),
+                onTap: () => setState(() {
+                  _adminSelectedLocationId = null;
+                  _editMode = false;
+                }),
                 child: Container(
                   padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
-                  child: Icon(Icons.arrow_back_ios_new, size: 14, color: c.textDim),
+                  decoration: BoxDecoration(
+                    color: c.card,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: c.border),
+                  ),
+                  child: Icon(
+                    Icons.arrow_back_ios_new,
+                    size: 14,
+                    color: c.textDim,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
-              Expanded(child: Text(currentLocation?.name ?? '', style: TextStyle(color: c.textMain, fontSize: 18, fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis)),
+              Expanded(
+                child: Text(
+                  currentLocation?.name ?? '',
+                  style: TextStyle(
+                    color: c.textMain,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -503,13 +664,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (sensors.isNotEmpty) ...[
             _SectionHeader(label: 'Датчики', count: sensors.length),
             const SizedBox(height: 8),
-            Column(children: sensors.take(8).map((s) => _SensorRow(sensor: s)).toList()),
+            Column(
+              children: sensors
+                  .take(8)
+                  .map((s) => _SensorRow(sensor: s))
+                  .toList(),
+            ),
             const SizedBox(height: 14),
           ],
           if (alarms.isNotEmpty) ...[
             _SectionHeader(label: 'Последние события', count: alarms.length),
             const SizedBox(height: 8),
-            Column(children: alarms.map((alarm) => _AlarmRow(alarm: alarm, color: _alarmColor(alarm.status), bgColor: _alarmBg(alarm.status), label: _alarmLabel(alarm.status))).toList()),
+            Column(
+              children: alarms
+                  .map(
+                    (alarm) => _AlarmRow(
+                      alarm: alarm,
+                      color: _alarmColor(alarm.status),
+                      bgColor: _alarmBg(alarm.status),
+                      label: _alarmLabel(alarm.status),
+                    ),
+                  )
+                  .toList(),
+            ),
           ],
         ],
       ),
@@ -518,72 +695,138 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildUserView(AppScheme c) {
     final locations = widget.repo.locations;
-    final currentLocation = locations.isNotEmpty ? locations[_selectedLocationIndex] : null;
+    final currentLocation = locations.isNotEmpty
+        ? locations[_selectedLocationIndex]
+        : null;
     final sensors = _sensorsForCurrentLocation;
     // Фильтруем тревоги только по датчикам текущей локации.
     final locationSensorIds = sensors.map((s) => s.id).toSet();
     final alarms = widget.repo.alarms
-        .where((a) => a.sensorId != null && locationSensorIds.contains(a.sensorId))
+        .where(
+          (a) => a.sensorId != null && locationSensorIds.contains(a.sensorId),
+        )
         .take(5)
         .toList();
 
     return Container(
       color: c.bg,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
-        children: [
-          Text('Мониторинг', style: TextStyle(color: c.textMain, fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 0.2)),
-          const SizedBox(height: 14),
-          if (locations.length > 1) ...[
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                spacing: 6,
-                children: locations.asMap().entries.map((e) {
-                  final selected = e.key == _selectedLocationIndex;
-                  return GestureDetector(
-                    onTap: () { setState(() => _selectedLocationIndex = e.key); _loadCharts(); },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: selected ? c.cyan.withOpacity(0.12) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: selected ? c.cyan.withOpacity(0.6) : c.border),
-                      ),
-                      child: Text(e.value.name, style: TextStyle(fontSize: 12, fontWeight: selected ? FontWeight.w700 : FontWeight.w400, color: selected ? c.cyan : c.textDim)),
-                    ),
-                  );
-                }).toList(),
+      // FIX: pull-to-refresh как fallback на случай если WS недоступен.
+      // При pull — полный рефетч датчиков (GET /sensors/) включая актуальные pos_x/pos_y.
+      child: RefreshIndicator(
+        color: kCyan,
+        onRefresh: () async {
+          await widget.onRefresh();
+          if (mounted) setState(() {});
+        },
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
+          children: [
+            Text(
+              'Мониторинг',
+              style: TextStyle(
+                color: c.textMain,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
               ),
             ),
-            const SizedBox(height: 10),
-          ],
-          _buildSchemaCard(c, currentLocation, sensors, canManage: false),
-          const SizedBox(height: 14),
-          if (sensors.isNotEmpty) ...[
-            _SectionHeader(label: 'Датчики', count: sensors.length),
-            const SizedBox(height: 8),
-            Column(children: sensors.take(8).map((s) => _SensorRow(sensor: s)).toList()),
             const SizedBox(height: 14),
+            if (locations.length > 1) ...[
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  spacing: 6,
+                  children: locations.asMap().entries.map((e) {
+                    final selected = e.key == _selectedLocationIndex;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() => _selectedLocationIndex = e.key);
+                        _loadCharts();
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? c.cyan.withOpacity(0.12)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: selected
+                                ? c.cyan.withOpacity(0.6)
+                                : c.border,
+                          ),
+                        ),
+                        child: Text(
+                          e.value.name,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w400,
+                            color: selected ? c.cyan : c.textDim,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            _buildSchemaCard(c, currentLocation, sensors, canManage: false),
+            const SizedBox(height: 14),
+            if (sensors.isNotEmpty) ...[
+              _SectionHeader(label: 'Датчики', count: sensors.length),
+              const SizedBox(height: 8),
+              Column(
+                children: sensors
+                    .take(8)
+                    .map((s) => _SensorRow(sensor: s))
+                    .toList(),
+              ),
+              const SizedBox(height: 14),
+            ],
+            if (alarms.isNotEmpty) ...[
+              _SectionHeader(label: 'Последние события', count: alarms.length),
+              const SizedBox(height: 8),
+              Column(
+                children: alarms
+                    .map(
+                      (alarm) => _AlarmRow(
+                        alarm: alarm,
+                        color: _alarmColor(alarm.status),
+                        bgColor: _alarmBg(alarm.status),
+                        label: _alarmLabel(alarm.status),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
           ],
-          if (alarms.isNotEmpty) ...[
-            _SectionHeader(label: 'Последние события', count: alarms.length),
-            const SizedBox(height: 8),
-            Column(children: alarms.map((alarm) => _AlarmRow(alarm: alarm, color: _alarmColor(alarm.status), bgColor: _alarmBg(alarm.status), label: _alarmLabel(alarm.status))).toList()),
-          ],
-        ],
-      ),
+        ),
+      ), // RefreshIndicator
     );
   }
 
   /// Карточка мнемосхемы: просмотр с [InteractiveViewer] или редактирование [_EditableSchema].
-  Widget _buildSchemaCard(AppScheme c, dynamic currentLocation, List<SensorModel> sensors, {required bool canManage}) {
+  Widget _buildSchemaCard(
+    AppScheme c,
+    dynamic currentLocation,
+    List<SensorModel> sensors, {
+    required bool canManage,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: c.card,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _editMode ? c.accent.withOpacity(0.6) : c.border, width: _editMode ? 1.5 : 1),
+        border: Border.all(
+          color: _editMode ? c.accent.withOpacity(0.6) : c.border,
+          width: _editMode ? 1.5 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -594,58 +837,104 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ? _EditableSchema(
                     key: _schemaKey,
                     imageUrl: currentLocation?.imageUrl != null
-                        ? _resolveImageUrl(currentLocation!.imageUrl!, widget.repo.baseUrl)
+                        ? _resolveImageUrl(
+                            currentLocation!.imageUrl!,
+                            widget.repo.baseUrl,
+                          )
                         : null,
                     sensors: sensors,
                     onPanUpdate: _onSensorPanUpdate,
                   )
                 : currentLocation?.imageUrl != null
-                    ? _SchemaViewport(
-                        key: _schemaKey,
-                        imageUrl: _resolveImageUrl(currentLocation!.imageUrl!, widget.repo.baseUrl),
-                        sensors: sensors,
-                        transformCtrl: _transformCtrl,
-                        textDim: c.textDim,
-                        isDark: c.isDark,
-                      )
-                    : Container(
-                        height: 200,
-                        color: c.isDark ? const Color(0xFF060E0F) : const Color(0xFFF0F4F8),
-                        alignment: Alignment.center,
-                        child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.map_outlined, size: 36, color: c.textDim),
-                          const SizedBox(height: 8),
-                          Text(
-                            canManage ? 'Нажмите «↑ план» чтобы загрузить мнемосхему' : 'Мнемосхема не загружена',
-                            style: TextStyle(color: c.textDim, fontSize: 12),
-                            textAlign: TextAlign.center,
-                          ),
-                        ]),
-                      ),
+                ? _SchemaViewport(
+                    key: _schemaKey,
+                    imageUrl: _resolveImageUrl(
+                      currentLocation!.imageUrl!,
+                      widget.repo.baseUrl,
+                    ),
+                    sensors: sensors,
+                    transformCtrl: _transformCtrl,
+                    textDim: c.textDim,
+                    isDark: c.isDark,
+                  )
+                : Container(
+                    height: 200,
+                    color: c.isDark
+                        ? const Color(0xFF060E0F)
+                        : const Color(0xFFF0F4F8),
+                    alignment: Alignment.center,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.map_outlined, size: 36, color: c.textDim),
+                        const SizedBox(height: 8),
+                        Text(
+                          canManage
+                              ? 'Нажмите «↑ план» чтобы загрузить мнемосхему'
+                              : 'Мнемосхема не загружена',
+                          style: TextStyle(color: c.textDim, fontSize: 12),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
           ),
           if (_editMode || (canManage && currentLocation != null))
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(9)),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(9),
+              ),
               child: Container(
                 color: c.card2,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
                     if (_editMode) ...[
                       Icon(Icons.open_with, size: 13, color: c.accent),
                       const SizedBox(width: 5),
-                      Expanded(child: Text('Тащите датчики, затем нажмите ✓', style: TextStyle(color: c.accent, fontSize: 11, fontWeight: FontWeight.w600))),
-                      GestureDetector(onTap: _cancelEditMode, child: _SchemaBtn(label: '✕ отмена', color: c.red)),
+                      Expanded(
+                        child: Text(
+                          'Тащите датчики, затем нажмите ✓',
+                          style: TextStyle(
+                            color: c.accent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: _cancelEditMode,
+                        child: _SchemaBtn(label: '✕ отмена', color: c.red),
+                      ),
                       const SizedBox(width: 6),
-                      GestureDetector(onTap: _confirmEditMode, child: _SchemaBtn(label: '✓ сохранить', color: c.green)),
+                      GestureDetector(
+                        onTap: _confirmEditMode,
+                        child: _SchemaBtn(label: '✓ сохранить', color: c.green),
+                      ),
                     ] else ...[
                       const Spacer(),
                       GestureDetector(
-                        onTap: () => _showUploadPlanDialog(currentLocation!.id as int, currentLocation.name as String),
+                        onTap: () => _showUploadPlanDialog(
+                          currentLocation!.id as int,
+                          currentLocation.name as String,
+                        ),
                         child: _SchemaBtn(label: '↑ план', color: c.cyan),
                       ),
-                      const SizedBox(width: 6),
-                      GestureDetector(onTap: _enterEditMode, child: _SchemaBtn(label: '✎ датчики', color: c.accent)),
+                      // FIX: кнопка перетаскивания датчиков доступна только admin.
+                      // Для editor/viewer позиции readonly — сервер вернёт 403 на /position.
+                      if (_isAdmin) ...[
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: _enterEditMode,
+                          child: _SchemaBtn(
+                            label: '✎ датчики',
+                            color: c.accent,
+                          ),
+                        ),
+                      ],
                     ],
                   ],
                 ),
@@ -658,646 +947,3 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 // ── Плитка компании ───────────────────────────────────────────────────────────
-
-class _CompanyTile extends StatelessWidget {
-  const _CompanyTile({required this.name, required this.sensorCount, required this.onTap, required this.c});
-  final String name;
-  final int sensorCount;
-  final VoidCallback onTap;
-  final AppScheme c;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
-        child: Row(
-          children: [
-            Container(
-              width: 34, height: 34,
-              decoration: BoxDecoration(color: c.cyan.withOpacity(0.10), borderRadius: BorderRadius.circular(6), border: Border.all(color: c.cyan.withOpacity(0.25))),
-              alignment: Alignment.center,
-              child: Icon(Icons.business_outlined, size: 18, color: c.cyan),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(name, style: TextStyle(color: c.textMain, fontSize: 14, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
-                Text('$sensorCount датч.', style: TextStyle(fontSize: 11, color: c.textDim)),
-              ]),
-            ),
-            Icon(Icons.chevron_right, size: 18, color: c.textDim),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Секционный заголовок ──────────────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label, required this.count});
-  final String label;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors.of(context);
-    return Row(
-      children: [
-        Text(label.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: c.textDim, letterSpacing: 1.2)),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-          decoration: BoxDecoration(color: c.card2, borderRadius: BorderRadius.circular(4), border: Border.all(color: c.border)),
-          child: Text('$count', style: TextStyle(fontSize: 10, color: c.textDim, fontWeight: FontWeight.w600)),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Строка датчика (с графиком и переключателем темп/влажность) ───────────────
-
-class _SensorRow extends StatefulWidget {
-  const _SensorRow({required this.sensor});
-  final SensorModel sensor;
-
-  @override
-  State<_SensorRow> createState() => _SensorRowState();
-}
-
-class _SensorRowState extends State<_SensorRow> {
-  AppScheme get c => AppColors.of(context);
-  bool _showTemp = true;
-  SensorModel get s => widget.sensor;
-
-  Color get _stateColor => switch (s.state) {
-        SensorState.normal   => c.green,
-        SensorState.warning  => c.orange,
-        SensorState.critical => c.red,
-      };
-
-  Color get _powerColor {
-    if (s.isAcPowered) return c.green;
-    final b = s.batteryLevel;
-    if (b == null) return c.textDim;
-    if (b >= 50) return c.green;
-    if (b >= 25) return c.orange;
-    return c.red;
-  }
-
-  String get _powerLabel {
-    if (s.isAcPowered) return '~220В';
-    final b = s.batteryLevel;
-    return b != null ? '$b%' : '—';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors.of(context);
-    final tempPoints = s.points;
-    final humPoints = s.humidityPoints;
-    final hasChart = _showTemp ? tempPoints.isNotEmpty : humPoints.isNotEmpty;
-    final chartColor = _showTemp ? c.accent : c.cyan;
-    final chartPoints = _showTemp ? tempPoints : humPoints;
-    final chartUnit = _showTemp ? '°C' : '%';
-    final wMin = _showTemp ? s.warningMinTemp : s.warningMinHum;
-    final wMax = _showTemp ? s.warningMaxTemp : s.warningMaxHum;
-    final aMin = _showTemp ? s.alarmMinTemp : s.alarmMinHum;
-    final aMax = _showTemp ? s.alarmMaxTemp : s.alarmMaxHum;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        decoration: BoxDecoration(color: c.card, border: Border.all(color: c.border)),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(width: 4, color: _stateColor),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 7, height: 7,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: s.isOnline ? c.green : c.red,
-                              boxShadow: s.isOnline ? [BoxShadow(color: c.green.withOpacity(0.5), blurRadius: 5)] : null,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(s.name, style: TextStyle(color: c.textMain, fontSize: 13, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
-                          _MetricChip(value: '${s.temperature.toStringAsFixed(1)}°C', color: c.accent),
-                          const SizedBox(width: 4),
-                          _MetricChip(value: '${s.humidity.toStringAsFixed(1)}%', color: c.cyan),
-                          const SizedBox(width: 4),
-                          _MetricChip(value: _powerLabel, color: _powerColor),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          _ChartTab(label: 'Температура', selected: _showTemp, color: c.accent, onTap: () => setState(() => _showTemp = true)),
-                          const SizedBox(width: 6),
-                          _ChartTab(label: 'Влажность', selected: !_showTemp, color: c.cyan, onTap: () => setState(() => _showTemp = false)),
-                          const Spacer(),
-                          Text(
-                            _showTemp ? '${s.temperature.toStringAsFixed(1)}°C' : '${s.humidity.toStringAsFixed(1)}%',
-                            style: TextStyle(color: chartColor, fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.5),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      if (!hasChart)
-                        Container(height: 80, alignment: Alignment.center, child: Text('Нет данных за 24 часа', style: TextStyle(color: c.textDim, fontSize: 12)))
-                      else
-                        SizedBox(
-                          height: 110,
-                          child: LineChartWidget(points: chartPoints, color: chartColor, unit: chartUnit, warningMin: wMin, warningMax: wMax, alarmMin: aMin, alarmMax: aMax),
-                        ),
-                      if (hasChart) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                          decoration: BoxDecoration(color: c.card2, borderRadius: BorderRadius.circular(6)),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              _StatCell(label: 'Мин', value: '${chartPoints.reduce((a, b) => a < b ? a : b).toStringAsFixed(1)}$chartUnit', color: c.cyan),
-                              _VertDiv(),
-                              _StatCell(label: 'Среднее', value: '${(chartPoints.reduce((a, b) => a + b) / chartPoints.length).toStringAsFixed(1)}$chartUnit', color: c.textMain),
-                              _VertDiv(),
-                              _StatCell(label: 'Макс', value: '${chartPoints.reduce((a, b) => a > b ? a : b).toStringAsFixed(1)}$chartUnit', color: chartColor),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ChartTab extends StatelessWidget {
-  const _ChartTab({required this.label, required this.selected, required this.color, required this.onTap});
-  final String label;
-  final bool selected;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(5),
-          border: Border.all(color: selected ? color.withOpacity(0.55) : c.border),
-        ),
-        child: Text(label, style: TextStyle(fontSize: 11, fontWeight: selected ? FontWeight.w700 : FontWeight.w400, color: selected ? color : c.textDim, letterSpacing: 0.2)),
-      ),
-    );
-  }
-}
-
-class _StatCell extends StatelessWidget {
-  const _StatCell({required this.label, required this.value, required this.color});
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors.of(context);
-    return Column(
-      children: [
-        Text(label, style: TextStyle(fontSize: 9, color: c.textDim, letterSpacing: 0.4)),
-        const SizedBox(height: 3),
-        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-      ],
-    );
-  }
-}
-
-class _VertDiv extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors.of(context);
-    return Container(width: 1, height: 22, color: c.border);
-  }
-}
-
-class _MetricChip extends StatelessWidget {
-  const _MetricChip({required this.value, required this.color});
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withOpacity(0.3))),
-      child: Text(value, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w700)),
-    );
-  }
-}
-
-// ── Строка тревоги ────────────────────────────────────────────────────────────
-
-class _AlarmRow extends StatelessWidget {
-  const _AlarmRow({required this.alarm, required this.color, required this.bgColor, required this.label});
-  final AlarmModel alarm;
-  final Color color;
-  final Color bgColor;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors.of(context);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 6),
-        decoration: BoxDecoration(color: c.card, border: Border.all(color: c.border)),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(width: 4, color: color),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(alarm.title, style: TextStyle(color: c.textMain, fontSize: 13, fontWeight: FontWeight.w600)),
-                            if (alarm.description.isNotEmpty) ...[
-                              const SizedBox(height: 2),
-                              Text(alarm.description, style: TextStyle(fontSize: 11, color: c.textDim), maxLines: 1, overflow: TextOverflow.ellipsis),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withOpacity(0.4))),
-                        child: Text(label, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w700, letterSpacing: 0.4)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Кнопка на мнемосхеме ──────────────────────────────────────────────────────
-
-class _SchemaBtn extends StatelessWidget {
-  const _SchemaBtn({required this.label, required this.color});
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(6), border: Border.all(color: color.withOpacity(0.5))),
-      child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
-    );
-  }
-}
-
-// ── Превью файла ──────────────────────────────────────────────────────────────
-
-class _FilePreview extends StatelessWidget {
-  const _FilePreview({required this.name});
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors.of(context);
-    return Container(
-      height: 60, width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(color: c.card2, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
-      alignment: Alignment.centerLeft,
-      child: Row(
-        children: [
-          Icon(Icons.insert_drive_file_outlined, size: 18, color: c.cyan),
-          const SizedBox(width: 8),
-          Expanded(child: Text(name, style: TextStyle(fontSize: 12, color: c.textDim), overflow: TextOverflow.ellipsis)),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Диалоги ───────────────────────────────────────────────────────────────────
-
-class _AppDialog extends StatelessWidget {
-  const _AppDialog({required this.title, required this.content, required this.actions});
-  final String title;
-  final Widget content;
-  final List<Widget> actions;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors.of(context);
-    return AlertDialog(
-      backgroundColor: c.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: c.border)),
-      title: Text(title, style: TextStyle(color: c.textMain, fontWeight: FontWeight.w600, fontSize: 16)),
-      content: content,
-      actions: actions,
-    );
-  }
-}
-
-class _AppField extends StatelessWidget {
-  const _AppField({required this.controller, required this.label});
-  final TextEditingController controller;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors.of(context);
-    return TextField(
-      controller: controller,
-      style: TextStyle(color: c.textMain, fontSize: 14),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(color: c.textDim, fontSize: 13),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.cyan)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      ),
-    );
-  }
-}
-
-class _OutlineBtn extends StatelessWidget {
-  const _OutlineBtn({required this.label, required this.color, required this.onTap});
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(7), border: Border.all(color: color.withOpacity(0.5))),
-        alignment: Alignment.center,
-        child: Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600)),
-      ),
-    );
-  }
-}
-
-class _AppTextBtn extends StatelessWidget {
-  const _AppTextBtn({required this.label, required this.onTap});
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors.of(context);
-    return TextButton(onPressed: onTap, child: Text(label, style: TextStyle(color: c.textDim, fontSize: 13)));
-  }
-}
-
-class _AppFilledBtn extends StatelessWidget {
-  const _AppFilledBtn({required this.label, this.onTap});
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return FilledButton(
-      style: FilledButton.styleFrom(backgroundColor: kCyan, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-      onPressed: onTap,
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-    );
-  }
-}
-
-// ── Режим просмотра схемы ─────────────────────────────────────────────────────
-
-/// План с зумом/панорамированием; точки датчиков — [Positioned] через `x,y` в долях размера изображения.
-class _SchemaViewport extends StatefulWidget {
-  const _SchemaViewport({super.key, required this.imageUrl, required this.sensors, required this.transformCtrl, required this.textDim, required this.isDark});
-  final String imageUrl;
-  final List<SensorModel> sensors;
-  final TransformationController transformCtrl;
-  final Color textDim;
-  final bool isDark;
-
-  @override
-  State<_SchemaViewport> createState() => _SchemaViewportState();
-}
-
-class _SchemaViewportState extends State<_SchemaViewport> {
-  double? _aspectRatio;
-
-  @override
-  void initState() { super.initState(); _resolveImageSize(); }
-
-  void _resolveImageSize() {
-    final stream = NetworkImage(widget.imageUrl).resolve(ImageConfiguration.empty);
-    stream.addListener(ImageStreamListener((info, _) {
-      if (!mounted) return;
-      final w = info.image.width.toDouble();
-      final h = info.image.height.toDouble();
-      if (h > 0) setState(() => _aspectRatio = w / h);
-    }));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final width = constraints.maxWidth;
-      final ratio = _aspectRatio ?? (16 / 9);
-      final height = width / ratio;
-      return SizedBox(
-        width: width, height: height,
-        child: InteractiveViewer(
-          transformationController: widget.transformCtrl,
-          minScale: 0.5, maxScale: 6.0,
-          child: Stack(
-            children: [
-              Image.network(
-                widget.imageUrl, width: width, height: height, fit: BoxFit.fill,
-                color: widget.isDark ? Colors.black.withOpacity(0.45) : Colors.black.withOpacity(0.15),
-                colorBlendMode: BlendMode.darken,
-                errorBuilder: (_, __, ___) => Center(child: Text('Не удалось загрузить план', style: TextStyle(color: widget.textDim, fontSize: 12))),
-              ),
-              ...widget.sensors.map((sensor) => Positioned(
-                left: sensor.x * width, top: sensor.y * height,
-                child: FractionalTranslation(translation: const Offset(-0.5, -0.5), child: SensorDot(state: sensor.state, sensor: sensor)),
-              )),
-            ],
-          ),
-        ),
-      );
-    });
-  }
-}
-
-// ── Мнемосхема в режиме редактирования ───────────────────────────────────────
-
-/// Режим редактирования: без InteractiveViewer, координаты обновляются жестами [_SmoothDraggableDot].
-class _EditableSchema extends StatefulWidget {
-  const _EditableSchema({super.key, required this.imageUrl, required this.sensors, required this.onPanUpdate});
-  final String? imageUrl;
-  final List<SensorModel> sensors;
-  final void Function(SensorModel sensor, Offset delta) onPanUpdate;
-
-  @override
-  State<_EditableSchema> createState() => _EditableSchemaState();
-}
-
-class _EditableSchemaState extends State<_EditableSchema> {
-  double? _aspectRatio;
-
-  @override
-  void initState() { super.initState(); if (widget.imageUrl != null) _resolveImageSize(); }
-
-  void _resolveImageSize() {
-    final stream = NetworkImage(widget.imageUrl!).resolve(ImageConfiguration.empty);
-    stream.addListener(ImageStreamListener((info, _) {
-      if (!mounted) return;
-      final w = info.image.width.toDouble();
-      final h = info.image.height.toDouble();
-      if (h > 0) setState(() => _aspectRatio = w / h);
-    }));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColors.of(context);
-    return LayoutBuilder(builder: (context, constraints) {
-      final width = constraints.maxWidth;
-      final ratio = _aspectRatio ?? (16 / 9);
-      final height = width / ratio;
-      final schemaBg = c.isDark ? const Color(0xFF060E0F) : const Color(0xFFF0F4F8);
-      return SizedBox(
-        width: width, height: height,
-        child: Stack(
-          children: [
-            Container(
-              color: schemaBg, width: width, height: height,
-              child: widget.imageUrl != null
-                  ? Image.network(
-                      widget.imageUrl!, fit: BoxFit.fill, width: width, height: height,
-                      color: c.isDark ? Colors.black.withOpacity(0.45) : Colors.black.withOpacity(0.15),
-                      colorBlendMode: BlendMode.darken,
-                      errorBuilder: (_, __, ___) => Center(child: Text('Не удалось загрузить план', style: TextStyle(color: c.textDim, fontSize: 12))),
-                    )
-                  : Center(child: Text('Мнемосхема не загружена', style: TextStyle(color: c.textDim, fontSize: 12))),
-            ),
-            ...widget.sensors.map((s) => _SmoothDraggableDot(
-              sensor: s, schemaWidth: width, schemaHeight: height,
-              onPanUpdate: (delta) => widget.onPanUpdate(s, delta),
-            )),
-          ],
-        ),
-      );
-    });
-  }
-}
-
-// ── Датчик с плавным перетаскиванием ─────────────────────────────────────────
-
-class _SmoothDraggableDot extends StatefulWidget {
-  const _SmoothDraggableDot({required this.sensor, required this.schemaWidth, required this.schemaHeight, required this.onPanUpdate});
-  final SensorModel sensor;
-  final double schemaWidth;
-  final double schemaHeight;
-  final void Function(Offset delta) onPanUpdate;
-
-  @override
-  State<_SmoothDraggableDot> createState() => _SmoothDraggableDotState();
-}
-
-class _SmoothDraggableDotState extends State<_SmoothDraggableDot> {
-  AppScheme get c => AppColors.of(context);
-  bool _dragging = false;
-
-  @override
-  Widget build(BuildContext context) {
-    const cardW = 62.0;
-    const cardH = 36.0;
-    final px = widget.sensor.x * widget.schemaWidth - cardW / 2;
-    final py = widget.sensor.y * widget.schemaHeight - cardH / 2;
-
-    return Positioned(
-      left: px.clamp(0.0, widget.schemaWidth - cardW),
-      top: py.clamp(0.0, widget.schemaHeight - cardH),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onPanStart: (_) => setState(() => _dragging = true),
-        onPanUpdate: (d) => widget.onPanUpdate(d.delta),
-        onPanEnd: (_) => setState(() => _dragging = false),
-        child: AnimatedScale(
-          scale: _dragging ? 1.05 : 1.0,
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              if (_dragging)
-                Positioned.fill(child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(7),
-                    color: _stateColor(widget.sensor.state).withOpacity(0.15),
-                  ),
-                )),
-              SensorDot(state: widget.sensor.state, sensor: widget.sensor),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Color _stateColor(SensorState s) => switch (s) {
-        SensorState.normal   => c.green,
-        SensorState.warning  => c.orange,
-        SensorState.critical => c.red,
-      };
-}

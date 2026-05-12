@@ -4,7 +4,7 @@ import 'app_theme.dart';
 // Акцентные цвета (одинаковы в обеих темах)
 const kAccent  = Color(0xFFFFD550); // жёлтый (фон, бордеры)
 const kCyan    = Color(0xFF07BCD4); // голубой
-const kGreen   = Color(0xFF01E676); // зелёный
+const kGreen   = Color(0xFF01e676); // зелёный
 const kRed     = Color(0xFFFF5252); // красный
 const kOrange  = Color(0xFFFFB300); // оранжевый
 const kTextDim = Color(0xFF7A8A8E); // приглушённый (тёмная тема)
@@ -53,7 +53,6 @@ class AppScheme {
         yellowBg   = const Color(0xFFFFF3CC),
         redBg      = const Color(0xFFFFEBEE),
         greenBg    = const Color(0xFFf5fff6),
-        // В светлой теме — тёмно-янтарный для читаемости
         accentText = kAccentDark,
         isDark     = false;
 
