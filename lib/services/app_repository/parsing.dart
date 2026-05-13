@@ -93,6 +93,54 @@ extension AppRepositoryParsing on AppRepository {
       ..alarmMaxHum = s.alarmMaxHum;
   }
 
+  SensorModel _mergeSensorHistory(SensorModel sensor, SensorModel previous) {
+    final points = sensor.points.isNotEmpty
+        ? sensor.points
+        : List<double>.of(previous.points);
+    final humidityPoints = sensor.humidityPoints.isNotEmpty
+        ? sensor.humidityPoints
+        : List<double>.of(previous.humidityPoints);
+    final timestamps = sensor.timestamps.isNotEmpty
+        ? sensor.timestamps
+        : List<DateTime>.of(previous.timestamps);
+
+    return SensorModel(
+        id: sensor.id,
+        name: sensor.name,
+        groupId: sensor.groupId,
+        location: sensor.location,
+        temperature: points.isNotEmpty
+            ? previous.temperature
+            : sensor.temperature,
+        humidity: humidityPoints.isNotEmpty
+            ? previous.humidity
+            : sensor.humidity,
+        state: sensor.state,
+        x: sensor.x,
+        y: sensor.y,
+        points: points,
+        humidityPoints: humidityPoints,
+        timestamps: timestamps,
+        controlUnitId: sensor.controlUnitId ?? previous.controlUnitId,
+        internalId: sensor.internalId ?? previous.internalId,
+        alarmDelaySeconds: sensor.alarmDelaySeconds,
+        powerStatus: sensor.powerStatus ?? previous.powerStatus,
+        batteryLevel: sensor.batteryLevel ?? previous.batteryLevel,
+        simBalance: sensor.simBalance ?? previous.simBalance,
+        gsmSignal: sensor.gsmSignal ?? previous.gsmSignal,
+        isOnline: sensor.isOnline,
+        lastSeen: sensor.lastSeen ?? previous.lastSeen,
+      )
+      ..warningMinTemp = sensor.warningMinTemp
+      ..warningMaxTemp = sensor.warningMaxTemp
+      ..alarmMinTemp = sensor.alarmMinTemp
+      ..alarmMaxTemp = sensor.alarmMaxTemp
+      ..warningMinHum = sensor.warningMinHum
+      ..warningMaxHum = sensor.warningMaxHum
+      ..alarmMinHum = sensor.alarmMinHum
+      ..alarmMaxHum = sensor.alarmMaxHum;
+  }
+
   AlarmModel alarmFromJson(Map<String, dynamic> j) {
     // парсинг тревоги с API
     final st = switch (j['status'] as String? ?? '') {

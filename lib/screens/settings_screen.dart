@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/audit_entry.dart';
 import '../models/location_details.dart';
@@ -35,7 +37,7 @@ class SettingsScreen extends StatefulWidget {
 
   final AppRepository repo;
   final Future<void> Function() onRefresh;
-  final VoidCallback? onLogout;
+  final Future<void> Function()? onLogout;
   final VoidCallback? onToggleTheme;
 
   @override
@@ -61,6 +63,9 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   List<UserModel> _allCompanyUsers = [];
   bool _allCompanyUsersLoading = false;
+  NotificationPreferences? _notificationPrefs;
+  bool _notificationPrefsLoading = false;
+  final Set<String> _notificationSaving = {};
 
   @override
   void initState() {
@@ -233,9 +238,84 @@ class _SettingsScreenState extends State<SettingsScreen>
     return name.isNotEmpty ? name[0].toUpperCase() : '?';
   }
 
+  Future<void> _loadNotificationPreferences() async {
+    if (_notificationPrefsLoading) return;
+    setState(() => _notificationPrefsLoading = true);
+    final err = await widget.repo.loadNotificationPreferences();
+    if (!mounted) return;
+    setState(() {
+      _notificationPrefs = widget.repo.notificationPreferences;
+      _notificationPrefsLoading = false;
+    });
+    if (err != null) _snack(err);
+  }
+
+  Future<void> _updateNotificationPreference(
+    String key,
+    bool value,
+    StateSetter setDialogState,
+  ) async {
+    if (_notificationSaving.contains(key)) return;
+    setState(() => _notificationSaving.add(key));
+    setDialogState(() {});
+
+    final err = await widget.repo.updateNotificationPreferences({key: value});
+    if (!mounted) return;
+
+    setState(() {
+      _notificationSaving.remove(key);
+      _notificationPrefs = widget.repo.notificationPreferences;
+    });
+    setDialogState(() {});
+    if (err != null) _snack(err);
+  }
+
+  Future<void> _connectTelegram(StateSetter setDialogState) async {
+    if (_notificationSaving.contains('telegram_link')) return;
+    setState(() => _notificationSaving.add('telegram_link'));
+    setDialogState(() {});
+
+    final (url, err) = await widget.repo.createTelegramLink();
+    if (!mounted) return;
+
+    setState(() => _notificationSaving.remove('telegram_link'));
+    setDialogState(() {});
+    if (err != null || url == null) {
+      _snack(err ?? 'Не удалось создать ссылку Telegram');
+      return;
+    }
+
+    final opened = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened) {
+      await Clipboard.setData(ClipboardData(text: url));
+      _snack('Ссылка Telegram скопирована');
+    }
+  }
+
+  Future<void> _unlinkTelegram(StateSetter setDialogState) async {
+    if (_notificationSaving.contains('telegram_unlink')) return;
+    setState(() => _notificationSaving.add('telegram_unlink'));
+    setDialogState(() {});
+
+    final err = await widget.repo.unlinkTelegram();
+    if (!mounted) return;
+
+    setState(() {
+      _notificationSaving.remove('telegram_unlink');
+      _notificationPrefs = widget.repo.notificationPreferences;
+    });
+    setDialogState(() {});
+    if (err != null) _snack(err);
+  }
+
   // ── Диалог настроек приложения ─────────────────────────────────────────────
 
   Future<void> _showAppSettingsDialog() async {
+    await _loadNotificationPreferences();
+    if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -245,81 +325,89 @@ class _SettingsScreenState extends State<SettingsScreen>
 
           return _DarkDialog(
             title: 'Настройки',
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _SectionLabel('ОФОРМЛЕНИЕ'),
-                const SizedBox(height: 10),
-                GestureDetector(
-                  onTap: () {
-                    widget.onToggleTheme?.call();
-                    setSt(() {});
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: kCyan.withOpacity(0.07),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: kCyan.withOpacity(0.35)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isDark
-                              ? Icons.light_mode_outlined
-                              : Icons.dark_mode_outlined,
-                          color: kCyan,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SectionLabel('ОФОРМЛЕНИЕ'),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: () {
+                      widget.onToggleTheme?.call();
+                      setSt(() {});
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: kCyan.withOpacity(0.07),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: kCyan.withOpacity(0.35)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
                             isDark
-                                ? 'Переключить на светлую тему'
-                                : 'Переключить на тёмную тему',
-                            style: const TextStyle(
-                              color: kCyan,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
+                                ? Icons.light_mode_outlined
+                                : Icons.dark_mode_outlined,
+                            color: kCyan,
+                            size: 18,
                           ),
-                        ),
-                        Container(
-                          width: 42,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? AppColors.of(context).border
-                                : kCyan.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: kCyan.withOpacity(0.5)),
-                          ),
-                          child: AnimatedAlign(
-                            duration: const Duration(milliseconds: 180),
-                            alignment: isDark
-                                ? Alignment.centerLeft
-                                : Alignment.centerRight,
-                            child: Container(
-                              width: 18,
-                              height: 18,
-                              margin: const EdgeInsets.symmetric(horizontal: 3),
-                              decoration: const BoxDecoration(
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              isDark
+                                  ? 'Переключить на светлую тему'
+                                  : 'Переключить на тёмную тему',
+                              style: const TextStyle(
                                 color: kCyan,
-                                shape: BoxShape.circle,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                          Container(
+                            width: 42,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? AppColors.of(context).border
+                                  : kCyan.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: kCyan.withOpacity(0.5)),
+                            ),
+                            child: AnimatedAlign(
+                              duration: const Duration(milliseconds: 180),
+                              alignment: isDark
+                                  ? Alignment.centerLeft
+                                  : Alignment.centerRight,
+                              child: Container(
+                                width: 18,
+                                height: 18,
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 3,
+                                ),
+                                decoration: const BoxDecoration(
+                                  color: kCyan,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 18),
+                  const _SectionLabel('УВЕДОМЛЕНИЯ'),
+                  const SizedBox(height: 10),
+                  ..._notificationPreferenceCards(setSt),
+                ],
+              ),
             ),
             actions: [
               _DarkTextButton(
@@ -334,6 +422,119 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   // ── Диалог редактирования профиля ──────────────────────────────────────────
+
+  List<Widget> _notificationPreferenceCards(StateSetter setDialogState) {
+    final prefs = _notificationPrefs;
+    if (_notificationPrefsLoading) {
+      return const [
+        SizedBox(
+          height: 64,
+          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+      ];
+    }
+    if (prefs == null) {
+      return [
+        _SettingsInfoCard(
+          icon: Icons.error_outline,
+          title: 'Настройки уведомлений недоступны',
+          subtitle: 'Проверьте соединение и попробуйте снова.',
+          color: kRed,
+          trailing: TextButton(
+            onPressed: () async {
+              await _loadNotificationPreferences();
+              setDialogState(() {});
+            },
+            child: const Text('Повторить'),
+          ),
+        ),
+      ];
+    }
+
+    final email = prefs.email ?? widget.repo.currentUserEmail;
+    final hasEmail = email != null && email.trim().isNotEmpty;
+
+    return [
+      _SettingsInfoCard(
+        icon: Icons.notifications_active_outlined,
+        title: 'Push-уведомления',
+        subtitle: 'Устройств: ${prefs.activePushDevices}',
+        color: kCyan,
+        trailing: Switch(
+          value: prefs.pushNotificationsEnabled,
+          onChanged: _notificationSaving.contains('push_notifications_enabled')
+              ? null
+              : (value) => _updateNotificationPreference(
+                  'push_notifications_enabled',
+                  value,
+                  setDialogState,
+                ),
+        ),
+      ),
+      const SizedBox(height: 8),
+      _SettingsInfoCard(
+        icon: Icons.chat_bubble_outline,
+        title: 'Telegram-уведомления',
+        subtitle: prefs.telegramConnected
+            ? 'Telegram подключён'
+            : 'Telegram ещё не подключён',
+        color: kCyan,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!prefs.telegramConnected)
+              TextButton(
+                onPressed: _notificationSaving.contains('telegram_link')
+                    ? null
+                    : () => _connectTelegram(setDialogState),
+                child: const Text('Подключить'),
+              )
+            else
+              IconButton(
+                tooltip: 'Отключить Telegram',
+                onPressed: _notificationSaving.contains('telegram_unlink')
+                    ? null
+                    : () => _unlinkTelegram(setDialogState),
+                icon: const Icon(Icons.link_off_outlined, size: 18),
+              ),
+            Switch(
+              value: prefs.telegramNotificationsEnabled,
+              onChanged:
+                  !prefs.telegramConnected ||
+                      _notificationSaving.contains(
+                        'telegram_notifications_enabled',
+                      )
+                  ? null
+                  : (value) => _updateNotificationPreference(
+                      'telegram_notifications_enabled',
+                      value,
+                      setDialogState,
+                    ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 8),
+      _SettingsInfoCard(
+        icon: Icons.alternate_email_outlined,
+        title: 'Email-уведомления',
+        subtitle: hasEmail ? email : 'Email не указан',
+        color: hasEmail ? kCyan : AppColors.of(context).textDim,
+        trailing: Switch(
+          value: hasEmail && prefs.emailNotificationsEnabled,
+          onChanged:
+              !hasEmail ||
+                  _notificationSaving.contains('email_notifications_enabled')
+              ? null
+              : (value) => _updateNotificationPreference(
+                  'email_notifications_enabled',
+                  value,
+                  setDialogState,
+                ),
+        ),
+      ),
+    ];
+  }
 
   Future<void> _showEditProfileDialog() async {
     final nameCtrl = TextEditingController(
@@ -746,8 +947,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       icon: Icon(Icons.logout, color: kRed, size: 20),
                       tooltip: 'Выйти',
                       onPressed: () async {
-                        await repo.logout();
-                        widget.onLogout?.call();
+                        await widget.onLogout?.call();
                       },
                     ),
                   ],

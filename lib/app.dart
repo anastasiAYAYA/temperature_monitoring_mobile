@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'screens/dashboard_screen.dart';
@@ -65,18 +67,70 @@ class _RootPageState extends State<RootPage> {
   final repo = AppRepository(); // репозиторий
   int tab = 0;
   bool loading = false; // признак загрузки
+  bool _refreshInFlight = false;
+  Timer? _refreshTimer;
   String? error; // ошибка
 
-  Future<void> _reload() async {
-    // функция для перезагрузки данных
+  @override
+  void dispose() {
+    _stopAutoRefresh();
+    super.dispose();
+  }
+
+  void _startAutoRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _reload(showLoading: false),
+    );
+  }
+
+  void _stopAutoRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+  }
+
+  void _startRealtimeUpdates() {
+    repo.connectWebSocket((_, _, _, _) {
+      if (!mounted) return;
+      setState(() {});
+    });
+  }
+
+  Future<void> _logout() async {
+    _stopAutoRefresh();
+    await repo.logout();
+    if (!mounted) return;
     setState(() {
-      loading = true;
-      error = null;
-    }); // устанавливаем признак загрузки и ошибку
-    final err = await repo.loadAll(); // загружаем данные
-    if (!mounted) return; // если приложение не смонтировано, то выходим
-    setState(() {
+      tab = 0;
       loading = false;
+      error = null;
+    });
+  }
+
+  Future<void> _reload({bool showLoading = true}) async {
+    // функция для перезагрузки данных
+    if (_refreshInFlight || repo.token == null) return;
+    _refreshInFlight = true;
+    if (showLoading) {
+      setState(() {
+        loading = true;
+        error = null;
+      }); // устанавливаем признак загрузки и ошибку
+    }
+
+    String? err;
+    try {
+      err = await repo.loadAll(); // загружаем данные
+    } catch (e) {
+      err = 'Сервер недоступен: $e';
+    } finally {
+      _refreshInFlight = false;
+    }
+    if (!mounted) return; // если приложение не смонтировано, то выходим
+
+    setState(() {
+      if (showLoading) loading = false;
       error = err;
     }); // устанавливаем признак загрузки и ошибку
   }
@@ -91,6 +145,8 @@ class _RootPageState extends State<RootPage> {
     }); // устанавливаем таб на главную и признак загрузки
     final err = await repo.loadAll(); // загружаем данные
     if (!mounted) return; // если приложение не смонтировано, то выходим
+    if (err == null) _startRealtimeUpdates();
+    _startAutoRefresh();
     setState(() {
       loading = false;
       error = err;
@@ -114,9 +170,7 @@ class _RootPageState extends State<RootPage> {
         // экран настройки
         repo: repo, // репозиторий
         onRefresh: _reload, // функция для перезагрузки данных
-        onLogout: () => setState(() {
-          tab = 0;
-        }), // функция для выхода
+        onLogout: _logout, // функция для выхода
         onToggleTheme: widget.onToggleTheme, // функция для переключения темы
       ),
     ];
@@ -158,15 +212,7 @@ class _RootPageState extends State<RootPage> {
             ), // цвет иконки
           ),
           IconButton(
-            onPressed: loading
-                ? null
-                : () async {
-                    // функция для выхода
-                    await repo.logout(); // выход
-                    setState(() {
-                      tab = 0;
-                    }); // устанавливаем таб на главную
-                  },
+            onPressed: loading ? null : _logout,
             icon: const Icon(
               Icons.logout,
               color: Color(0xFFFF5252),

@@ -26,11 +26,12 @@ extension AppRepositoryWebSocket on AppRepository {
 
   void _wsConnect() {
     // внутреннее подключение к каналу alarms
-    WebSocket.connect('ws://157.90.127.202:8000/ws/alarms')
+    final wsUrl = 'ws://157.90.127.202:8000/api/v1/ws/alarms?token=$token';
+    WebSocket.connect(wsUrl)
         .then((ws) {
           // асинхронный коннект
           _wsChannel = ws; // сохраняем сокет
-          debugPrint('[WS] Подключён к ws/alarms'); // лог
+          debugPrint('[WS] Подключён к /api/v1/ws/alarms'); // лог
           ws.listen(
             // подписка на поток сообщений
             _wsOnData, // обработчик строки JSON

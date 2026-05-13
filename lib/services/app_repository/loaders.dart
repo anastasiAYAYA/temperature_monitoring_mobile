@@ -9,11 +9,18 @@ extension AppRepositoryLoaders on AppRepository {
     final s = await get('/sensors/'); // GET список датчиков
     if (s.statusCode != 200)
       return parseError(s.body) ?? 'Не удалось получить датчики'; // ошибка HTTP
+    final previousSensors = {for (final sensor in sensors) sensor.id: sensor};
     sensors =
         _extractDataList(s.body) // парсим массив из JSON
             .map(
               (e) => sensorFromJson(e as Map<String, dynamic>),
             ) // каждый элемент → SensorModel
+            .map((sensor) {
+              final previous = previousSensors[sensor.id];
+              return previous == null
+                  ? sensor
+                  : _mergeSensorHistory(sensor, previous);
+            })
             .toList(); // материализуем список
 
     final a = await get('/alarms/'); // GET список тревог
@@ -108,6 +115,7 @@ extension AppRepositoryLoaders on AppRepository {
           y: s.y, // позиция Y на плане (0–1)
           points: s.points, // история температуры для графика
           humidityPoints: s.humidityPoints, // история влажности
+          timestamps: s.timestamps,
           controlUnitId: s.controlUnitId, // привязка к ЦБУ
           internalId: s.internalId, // внутренний id на устройстве
           alarmDelaySeconds: s.alarmDelaySeconds, // задержка перед тревогой
@@ -187,6 +195,7 @@ extension AppRepositoryLoaders on AppRepository {
                 y: sensors[i].y, // Y
                 points: sensors[i].points, // точки графика t
                 humidityPoints: sensors[i].humidityPoints, // точки графика h
+                timestamps: sensors[i].timestamps,
                 controlUnitId: sensors[i].controlUnitId, // ЦБУ id
                 internalId: sensors[i].internalId, // internal id
                 alarmDelaySeconds:
@@ -213,6 +222,7 @@ extension AppRepositoryLoaders on AppRepository {
       }
     }
 
+    await refreshLatestTelemetry();
     await loadNotificationDevices();
     await loadSubordinates(); // подчинённые пользователи (admin/editor)
     await loadAuditLog(); // журнал аудита
@@ -399,11 +409,11 @@ extension AppRepositoryLoaders on AppRepository {
     ); // индекс датчика в кеше
     if (i >= 0) {
       // датчик найден
-      if (tempPoints.isNotEmpty)
+      if (tempPoints.length > 1)
         sensors[i].points = tempPoints; // обновляем график t
-      if (humPoints.isNotEmpty)
+      if (humPoints.length > 1)
         sensors[i].humidityPoints = humPoints; // обновляем график h
-      if (tsPoints.isNotEmpty) sensors[i].timestamps = tsPoints; // ось времени
+      if (tsPoints.length > 1) sensors[i].timestamps = tsPoints; // ось времени
 
       // Обновляем текущие показания из последнего измерения
       try {
@@ -460,6 +470,93 @@ extension AppRepositoryLoaders on AppRepository {
         }
       } catch (_) {} // игнорируем сбой обновления last
     }
+  }
+
+  /// GET /api/v1/telemetry/{sensor_id}/latest — одно последнее измерение
+  Future<void> refreshLatestTelemetry() async {
+    if (sensors.isEmpty) return;
+
+    final ids = sensors.map((s) => s.id).toList();
+    final latest = await Future.wait(
+      ids.map((id) async {
+        try {
+          return MapEntry(
+            id,
+            await getLatestTelemetry(id).timeout(const Duration(seconds: 4)),
+          );
+        } catch (_) {
+          return MapEntry<int, SensorLiveData?>(id, null);
+        }
+      }),
+    );
+
+    final byId = Map<int, SensorLiveData?>.fromEntries(latest);
+    sensors = sensors.map((s) {
+      final live = byId[s.id];
+      if (live == null) return s;
+
+      final lastTimestamp = s.timestamps.isNotEmpty ? s.timestamps.last : null;
+      final shouldAppend =
+          lastTimestamp == null || live.timestamp.isAfter(lastTimestamp);
+      final points = shouldAppend
+          ? [
+              ...(s.points.length >= 600
+                  ? s.points.sublist(s.points.length - 599)
+                  : s.points),
+              live.temperature,
+            ]
+          : List<double>.of(s.points);
+      final humidityPoints = shouldAppend
+          ? [
+              ...(s.humidityPoints.length >= 600
+                  ? s.humidityPoints.sublist(s.humidityPoints.length - 599)
+                  : s.humidityPoints),
+              live.humidity,
+            ]
+          : List<double>.of(s.humidityPoints);
+      final timestamps = shouldAppend
+          ? [
+              ...(s.timestamps.length >= 600
+                  ? s.timestamps.sublist(s.timestamps.length - 599)
+                  : s.timestamps),
+              live.timestamp,
+            ]
+          : List<DateTime>.of(s.timestamps);
+
+      return SensorModel(
+          id: s.id,
+          name: s.name,
+          groupId: s.groupId,
+          location: s.location,
+          temperature: live.temperature,
+          humidity: live.humidity,
+          state: s.state,
+          x: s.x,
+          y: s.y,
+          points: points,
+          humidityPoints: humidityPoints,
+          timestamps: timestamps,
+          controlUnitId: s.controlUnitId,
+          internalId: s.internalId,
+          alarmDelaySeconds: s.alarmDelaySeconds,
+          powerStatus: s.powerStatus,
+          batteryLevel: s.batteryLevel,
+          simBalance: s.simBalance,
+          gsmSignal: s.gsmSignal,
+          isOnline: true,
+          lastSeen: live.timestamp.toIso8601String(),
+        )
+        ..warningMinTemp = s.warningMinTemp
+        ..warningMaxTemp = s.warningMaxTemp
+        ..alarmMinTemp = s.alarmMinTemp
+        ..alarmMaxTemp = s.alarmMaxTemp
+        ..warningMinHum = s.warningMinHum
+        ..warningMaxHum = s.warningMaxHum
+        ..alarmMinHum = s.alarmMinHum
+        ..alarmMaxHum = s.alarmMaxHum;
+    }).toList();
+
+    _applySensorAlarmStates();
   }
 
   /// GET /api/v1/telemetry/{sensor_id}/latest — одно последнее измерение

@@ -59,11 +59,11 @@ class _SensorDetailDialogState extends State<_SensorDetailDialog> {
     _fetchLiveData();
     _fetchSensorThresholds(); // загружаем актуальные пороги с сервера
     _liveTimer = Timer.periodic(
-      const Duration(seconds: 10),
+      const Duration(seconds: 5),
       (_) => _fetchLiveData(),
     );
     _historyTimer = Timer.periodic(
-      const Duration(seconds: 60),
+      const Duration(seconds: 5),
       (_) => _loadHistory(),
     );
   }

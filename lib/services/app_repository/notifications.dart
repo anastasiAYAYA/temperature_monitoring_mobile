@@ -1,6 +1,121 @@
 part of '../app_repository.dart';
 
+class NotificationPreferences {
+  const NotificationPreferences({
+    required this.notificationsEnabled,
+    required this.pushNotificationsEnabled,
+    required this.telegramNotificationsEnabled,
+    required this.emailNotificationsEnabled,
+    required this.telegramConnected,
+    required this.activePushDevices,
+    this.telegramChatId,
+    this.email,
+  });
+
+  final bool notificationsEnabled;
+  final bool pushNotificationsEnabled;
+  final bool telegramNotificationsEnabled;
+  final bool emailNotificationsEnabled;
+  final String? telegramChatId;
+  final bool telegramConnected;
+  final String? email;
+  final int activePushDevices;
+
+  factory NotificationPreferences.fromJson(Map<String, dynamic> j) {
+    return NotificationPreferences(
+      notificationsEnabled: j['notifications_enabled'] as bool? ?? true,
+      pushNotificationsEnabled:
+          j['push_notifications_enabled'] as bool? ?? true,
+      telegramNotificationsEnabled:
+          j['telegram_notifications_enabled'] as bool? ?? false,
+      emailNotificationsEnabled:
+          j['email_notifications_enabled'] as bool? ?? false,
+      telegramChatId: j['telegram_chat_id'] as String?,
+      telegramConnected: j['telegram_connected'] as bool? ?? false,
+      email: j['email'] as String?,
+      activePushDevices: (j['active_push_devices'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 extension AppRepositoryNotifications on AppRepository {
+  Future<String?> loadNotificationPreferences() async {
+    final r = await get('/notifications/preferences');
+    if (r.statusCode != 200) {
+      return parseError(r.body) ??
+          'Не удалось загрузить настройки уведомлений (${r.statusCode})';
+    }
+
+    final prefs = NotificationPreferences.fromJson(
+      jsonDecode(r.body) as Map<String, dynamic>,
+    );
+    notificationPreferences = prefs;
+    currentNotificationsEnabled = prefs.notificationsEnabled;
+    currentTelegramChatId = prefs.telegramChatId;
+    currentUserEmail = prefs.email ?? currentUserEmail;
+    return null;
+  }
+
+  Future<String?> updateNotificationPreferences(
+    Map<String, dynamic> changes,
+  ) async {
+    final body = {'notifications_enabled': true, ...changes};
+    final r = await patch('/notifications/preferences', body);
+    if (r.statusCode != 200) {
+      return parseError(r.body) ??
+          'Не удалось обновить настройки уведомлений (${r.statusCode})';
+    }
+
+    final prefs = NotificationPreferences.fromJson(
+      jsonDecode(r.body) as Map<String, dynamic>,
+    );
+    notificationPreferences = prefs;
+    currentNotificationsEnabled = prefs.notificationsEnabled;
+    currentTelegramChatId = prefs.telegramChatId;
+    currentUserEmail = prefs.email ?? currentUserEmail;
+    return null;
+  }
+
+  Future<(String?, String?)> createTelegramLink() async {
+    final r = await post('/notifications/telegram/link', {});
+    if (r.statusCode != 200 && r.statusCode != 201) {
+      return (
+        null,
+        parseError(r.body) ??
+            'Не удалось создать ссылку Telegram (${r.statusCode})',
+      );
+    }
+
+    final data = jsonDecode(r.body) as Map<String, dynamic>;
+    final botUrl = data['bot_url'] as String?;
+    if (botUrl == null || botUrl.isEmpty) {
+      return (null, 'Сервер не вернул ссылку Telegram');
+    }
+    return (botUrl, null);
+  }
+
+  Future<String?> unlinkTelegram() async {
+    final r = await delete('/notifications/telegram/link');
+    if (r.statusCode != 200 && r.statusCode != 204) {
+      return parseError(r.body) ??
+          'Не удалось отключить Telegram (${r.statusCode})';
+    }
+    if (r.body.isNotEmpty) {
+      try {
+        final prefs = NotificationPreferences.fromJson(
+          jsonDecode(r.body) as Map<String, dynamic>,
+        );
+        notificationPreferences = prefs;
+        currentNotificationsEnabled = prefs.notificationsEnabled;
+        currentTelegramChatId = prefs.telegramChatId;
+      } catch (_) {}
+    } else {
+      currentTelegramChatId = null;
+      await loadNotificationPreferences();
+    }
+    return null;
+  }
+
   Future<void> loadNotificationDevices() async {
     final r = await get('/notifications/devices');
     if (r.statusCode != 200) return;

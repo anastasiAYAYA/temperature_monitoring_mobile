@@ -50,6 +50,7 @@ class AppRepository {
   List<LocationModel> locations = []; // список локаций
   List<UserModel> subordinateUsers = []; // список подчиненных пользователей
   List<Map<String, dynamic>> controlUnits = []; // список ЦБУ
+  NotificationPreferences? notificationPreferences;
 
   WebSocket? _wsChannel; // активное WS-соединение
   List<NotificationDeviceModel> notificationDevices = [];

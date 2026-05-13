@@ -60,6 +60,7 @@ extension AppRepositoryAuthProfile on AppRepository {
     subordinateUsers = [];
     controlUnits = [];
     notificationDevices = [];
+    notificationPreferences = null;
   }
 
   Future<String?> updateProfile({String? fullName, String? email}) async {
