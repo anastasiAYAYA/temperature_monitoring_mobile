@@ -745,8 +745,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                     IconButton(
                       icon: Icon(Icons.logout, color: kRed, size: 20),
                       tooltip: 'Выйти',
-                      onPressed: () {
-                        repo.logout();
+                      onPressed: () async {
+                        await repo.logout();
                         widget.onLogout?.call();
                       },
                     ),

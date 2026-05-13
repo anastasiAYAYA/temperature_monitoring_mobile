@@ -19,13 +19,14 @@ class _LocationGroup extends StatefulWidget {
 }
 
 class _LocationGroupState extends State<_LocationGroup> {
-  // По умолчанию свёрнуто — датчики скрыты при входе на экран
   bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
+    final isAdmin = widget.repo.role == UserRole.admin;
+
     // Датчики без блока управления
-    final freesensors = widget.sensors
+    final freeSensors = widget.sensors
         .where((s) => s.controlUnitId == null)
         .toList();
 
@@ -40,7 +41,7 @@ class _LocationGroupState extends State<_LocationGroup> {
       ),
       child: Column(
         children: [
-          // ── Заголовок локации ────────────────────────────────────────────
+          // ── Заголовок локации ──────────────────────────────────────────
           GestureDetector(
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
@@ -89,7 +90,7 @@ class _LocationGroupState extends State<_LocationGroup> {
           if (_expanded) ...[
             Container(height: 1, color: AppColors.of(context).border),
 
-            // ── Блоки управления со своими датчиками ─────────────────────
+            // ── Блоки управления ───────────────────────────────────────────
             ...widget.controlUnits.map((unit) {
               final unitId = (unit['id'] as num?)?.toInt();
               final unitSensors = widget.sensors
@@ -100,20 +101,118 @@ class _LocationGroupState extends State<_LocationGroup> {
                 sensors: unitSensors,
                 onSensorTap: widget.onSensorTap,
                 repo: widget.repo,
+                // Для админа ЦБУ раскрывается вручную (датчики скрыты по умолчанию).
+                // Для остальных ролей — датчики видны сразу.
+                initiallyExpanded: !isAdmin,
               );
             }),
 
-            // ── Датчики без блока управления (после блоков) ──────────────
-            ...freesensors.mapIndexed(
+            // ── Датчики без блока управления ──────────────────────────────
+            // Для админа показываем их только если нет ЦБУ совсем,
+            // либо показываем всегда для остальных ролей.
+            if (!isAdmin || widget.controlUnits.isEmpty)
+              ...freeSensors.mapIndexed(
+                (i, sensor) => _SensorRow(
+                  sensor: sensor,
+                  repo: widget.repo,
+                  onTap: () => widget.onSensorTap(sensor),
+                  isLast: i == freeSensors.length - 1,
+                  indent: false,
+                ),
+              ),
+
+            // Для админа: свободные датчики (без ЦБУ) показываем отдельным блоком
+            if (isAdmin && widget.controlUnits.isNotEmpty && freeSensors.isNotEmpty)
+              _FreeSensorsGroup(
+                sensors: freeSensors,
+                onSensorTap: widget.onSensorTap,
+                repo: widget.repo,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Группа датчиков без ЦБУ (только для admin, когда есть ЦБУ в локации) ─────
+
+class _FreeSensorsGroup extends StatefulWidget {
+  const _FreeSensorsGroup({
+    required this.sensors,
+    required this.onSensorTap,
+    required this.repo,
+  });
+  final List<SensorModel> sensors;
+  final void Function(SensorModel) onSensorTap;
+  final AppRepository repo;
+
+  @override
+  State<_FreeSensorsGroup> createState() => _FreeSensorsGroupState();
+}
+
+class _FreeSensorsGroupState extends State<_FreeSensorsGroup> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+      decoration: BoxDecoration(
+        color: sch.card2,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: sch.border),
+      ),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(Icons.sensors, color: sch.textDim, size: 15),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Без блока управления',
+                      style: TextStyle(
+                        color: sch.textDim,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${widget.sensors.length} датч.',
+                    style: TextStyle(color: sch.textDim, fontSize: 11),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: sch.textDim,
+                    size: 16,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded) ...[
+            Container(height: 1, color: sch.border),
+            ...widget.sensors.mapIndexed(
               (i, sensor) => _SensorRow(
                 sensor: sensor,
                 repo: widget.repo,
                 onTap: () => widget.onSensorTap(sensor),
-                isLast: i == freesensors.length - 1,
-                indent: false,
+                isLast: i == widget.sensors.length - 1,
+                indent: true,
               ),
             ),
           ],
+          const SizedBox(height: 6),
         ],
       ),
     );
@@ -128,18 +227,27 @@ class _ControlUnitGroup extends StatefulWidget {
     required this.sensors,
     required this.onSensorTap,
     required this.repo,
+    this.initiallyExpanded = true,
   });
   final Map<String, dynamic> unit;
   final List<SensorModel> sensors;
   final void Function(SensorModel) onSensorTap;
   final AppRepository repo;
+  /// false = датчики скрыты при открытии (режим admin)
+  final bool initiallyExpanded;
 
   @override
   State<_ControlUnitGroup> createState() => _ControlUnitGroupState();
 }
 
 class _ControlUnitGroupState extends State<_ControlUnitGroup> {
-  bool _expanded = true;
+  late bool _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.initiallyExpanded;
+  }
 
   Color _gsmColor(AppScheme sch, int bars) => switch (bars) {
     5 => kGreen,
@@ -164,8 +272,6 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
     final isOnline = widget.unit['is_online'] as bool? ?? false;
     final unitName = widget.unit['name'] as String? ?? '—';
 
-    // Берём технические данные из первого датчика блока
-    // (GSM/SIM/питание — общие для всего блока управления)
     final refSensor = widget.sensors.isNotEmpty ? widget.sensors.first : null;
     final gsmSignal = refSensor?.gsmSignal;
     final gsmBars = refSensor?.gsmBars ?? 0;
@@ -182,7 +288,7 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
       ),
       child: Column(
         children: [
-          // ── Заголовок блока ──────────────────────────────────────────────
+          // ── Заголовок блока ────────────────────────────────────────────
           GestureDetector(
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
@@ -242,7 +348,7 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
                       ),
                     ],
                   ),
-                  // ── GSM / SIM / батарея блока управления ────────────────
+                  // ── GSM / SIM / батарея ──────────────────────────────────
                   if (refSensor != null) ...[
                     const SizedBox(height: 6),
                     Wrap(
@@ -327,7 +433,6 @@ class _SensorRowState extends State<_SensorRow> {
   @override
   void initState() {
     super.initState();
-    // Если sensor уже имеет ненулевые данные — показываем сразу
     if (widget.sensor.temperature != 0.0 || widget.sensor.humidity != 0.0) {
       _temp = widget.sensor.temperature;
       _hum = widget.sensor.humidity;

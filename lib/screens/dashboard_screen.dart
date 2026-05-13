@@ -310,8 +310,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final schemaW = box?.size.width ?? 300.0;
     final schemaH = box?.size.height ?? 300.0;
     setState(() {
-      sensor.x = (sensor.x + delta.dx / schemaW).clamp(0.0, 1.0);
-      sensor.y = (sensor.y + delta.dy / schemaH).clamp(0.0, 1.0);
+      sensor.x = sensor.x <= 1.0
+          ? (sensor.x + delta.dx / schemaW).clamp(0.0, 1.0)
+          : (sensor.x + delta.dx).clamp(0.0, double.infinity);
+      sensor.y = sensor.y <= 1.0
+          ? (sensor.y + delta.dy / schemaH).clamp(0.0, 1.0)
+          : (sensor.y + delta.dy).clamp(0.0, double.infinity);
     });
   }
 

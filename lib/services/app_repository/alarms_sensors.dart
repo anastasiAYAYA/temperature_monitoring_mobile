@@ -93,7 +93,7 @@ extension AppRepositoryAlarmsSensors on AppRepository {
     required double posX,
     required double posY, // id и позиция 0–1
   }) async {
-    final r = await patch('/sensors/$sensorId', {
+    final r = await patch('/sensors/$sensorId/position', {
       'pos_x': posX,
       'pos_y': posY,
     }); // PATCH позиции

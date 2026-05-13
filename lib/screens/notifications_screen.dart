@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/alarm_model.dart';
 import '../models/location_model.dart';
+import '../models/notification_device_model.dart';
 import '../models/user_role.dart';
 import '../services/app_repository.dart';
 import '../theme/app_colors.dart';
@@ -46,18 +47,32 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   _SortOrder _sortOrder = _SortOrder.newestFirst;
 
   final TextEditingController _searchCtrl = TextEditingController();
+  late final TextEditingController _telegramChatCtrl;
   String _searchQuery = '';
+  late bool _notificationsEnabled;
 
   /// У admin: если задан — показываем тревоги только датчиков этой локации.
   int? _adminSelectedLocationId;
 
   final Set<int> _mutedLocationIds = {};
+  bool _devicesLoading = false;
 
   bool get _isAdmin => widget.repo.role == UserRole.admin;
 
   @override
+  void initState() {
+    super.initState();
+    _telegramChatCtrl = TextEditingController(
+      text: widget.repo.currentTelegramChatId ?? '',
+    );
+    _notificationsEnabled = widget.repo.currentNotificationsEnabled;
+    _refreshNotificationDevices();
+  }
+
+  @override
   void dispose() {
     _searchCtrl.dispose();
+    _telegramChatCtrl.dispose();
     super.dispose();
   }
 
@@ -140,6 +155,159 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   // ── Диалог действия ──────────────────────────────────────────────────────
 
   /// `newStatus` — строка для API (`acknowledged` / `resolved`); маппится в репозитории на PATCH.
+  Future<void> _refreshNotificationDevices() async {
+    if (_devicesLoading) return;
+    setState(() => _devicesLoading = true);
+    await widget.repo.loadNotificationDevices();
+    if (!mounted) return;
+    setState(() => _devicesLoading = false);
+  }
+
+  Future<void> _sendTestNotification() async {
+    final err = await widget.repo.sendTestNotification();
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(err ?? 'Test notification sent')));
+  }
+
+  Future<void> _saveTelegramSettings() async {
+    final err = await widget.repo.updateTelegramSettings(
+      telegramChatId: _telegramChatCtrl.text,
+      notificationsEnabled: _notificationsEnabled,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(err ?? 'Telegram settings saved')));
+    setState(() {});
+  }
+
+  Future<void> _sendTelegramTest() async {
+    final err = await widget.repo.sendTelegramTest();
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(err ?? 'Telegram test sent')));
+  }
+
+  Future<void> _toggleNotificationDevice(NotificationDeviceModel device) async {
+    final err = await widget.repo.updateNotificationDevice(
+      tokenId: device.id,
+      enabled: !device.enabled,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(err ?? 'Device updated')));
+    setState(() {});
+  }
+
+  Future<void> _deleteNotificationDevice(NotificationDeviceModel device) async {
+    final err = await widget.repo.deleteNotificationDevice(device.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(err ?? 'Device deleted')));
+    setState(() {});
+  }
+
+  Future<void> _showRegisterDeviceDialog() async {
+    final tokenCtrl = TextEditingController();
+    final nameCtrl = TextEditingController();
+    var provider = 'fcm';
+    var platform = 'android';
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final sch = AppColors.of(ctx);
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            backgroundColor: Theme.of(ctx).colorScheme.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: sch.border),
+            ),
+            title: Text(
+              'Add device',
+              style: TextStyle(
+                color: sch.textMain,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: provider,
+                  dropdownColor: Theme.of(ctx).colorScheme.surface,
+                  items: const [
+                    DropdownMenuItem(value: 'fcm', child: Text('FCM')),
+                    DropdownMenuItem(value: 'expo', child: Text('Expo')),
+                    DropdownMenuItem(value: 'webpush', child: Text('Web Push')),
+                  ],
+                  onChanged: (v) =>
+                      setDialogState(() => provider = v ?? provider),
+                  decoration: const InputDecoration(labelText: 'Provider'),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: platform,
+                  dropdownColor: Theme.of(ctx).colorScheme.surface,
+                  items: const [
+                    DropdownMenuItem(value: 'android', child: Text('Android')),
+                    DropdownMenuItem(value: 'ios', child: Text('iOS')),
+                    DropdownMenuItem(value: 'web', child: Text('Web')),
+                  ],
+                  onChanged: (v) =>
+                      setDialogState(() => platform = v ?? platform),
+                  decoration: const InputDecoration(labelText: 'Platform'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: tokenCtrl,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(labelText: 'Token'),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('Cancel', style: TextStyle(color: sch.textDim)),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (saved != true || !mounted) return;
+    final err = await widget.repo.registerNotificationDevice(
+      token: tokenCtrl.text,
+      provider: provider,
+      platform: platform,
+      deviceName: nameCtrl.text,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(err ?? 'Device registered')));
+    setState(() {});
+  }
+
   Future<void> _showActionDialog({
     required AlarmModel alarm,
     required String newStatus,
@@ -747,6 +915,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
 
         // ── Список ─────────────────────────────────────────────────────────
+        _telegramPanel(),
+        _devicesPanel(),
         Expanded(child: _alarmList(alarms, canAct: true)),
       ],
     );
@@ -818,12 +988,194 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
 
         // ── Список ─────────────────────────────────────────────────────────
+        _telegramPanel(),
+        _devicesPanel(),
         Expanded(child: _alarmList(alarms, canAct: canAct)),
       ],
     );
   }
 
   // ── Переиспользуемые части UI ─────────────────────────────────────────────
+
+  Widget _telegramPanel() {
+    final sch = AppColors.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: sch.card,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: sch.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.chat_bubble_outline, size: 17, color: kCyan),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Telegram',
+                  style: TextStyle(
+                    color: sch.textMain,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Switch(
+                value: _notificationsEnabled,
+                onChanged: (value) =>
+                    setState(() => _notificationsEnabled = value),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _telegramChatCtrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Telegram chat ID'),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: _sendTelegramTest,
+                icon: const Icon(Icons.send_outlined, size: 17),
+                label: const Text('Test'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: _saveTelegramSettings,
+                icon: const Icon(Icons.save_outlined, size: 17),
+                label: const Text('Save'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _devicesPanel() {
+    final sch = AppColors.of(context);
+    final devices = widget.repo.notificationDevices;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: sch.card,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: sch.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.devices_other_outlined, size: 17, color: kCyan),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Push devices',
+                  style: TextStyle(
+                    color: sch.textMain,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Refresh',
+                onPressed: _devicesLoading ? null : _refreshNotificationDevices,
+                icon: _devicesLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.refresh, size: 18, color: sch.textDim),
+              ),
+              IconButton(
+                tooltip: 'Test',
+                onPressed: _sendTestNotification,
+                icon: const Icon(Icons.notification_add_outlined, size: 18),
+              ),
+              IconButton(
+                tooltip: 'Add',
+                onPressed: _showRegisterDeviceDialog,
+                icon: const Icon(Icons.add, size: 18),
+              ),
+            ],
+          ),
+          if (devices.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'No registered devices',
+                style: TextStyle(color: sch.textDim, fontSize: 12),
+              ),
+            )
+          else
+            ...devices.map(
+              (device) => Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      device.enabled
+                          ? Icons.notifications_active_outlined
+                          : Icons.notifications_off_outlined,
+                      size: 16,
+                      color: device.enabled ? kGreen : kRed,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${device.deviceName ?? device.platform} · ${device.provider}',
+                            style: TextStyle(color: sch.textMain, fontSize: 12),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (device.lastError?.isNotEmpty == true)
+                            Text(
+                              'Last error: ${device.lastError}',
+                              style: const TextStyle(color: kRed, fontSize: 11),
+                              overflow: TextOverflow.ellipsis,
+                            )
+                          else if (device.lastSuccessAt?.isNotEmpty == true)
+                            Text(
+                              'Last success: ${device.lastSuccessAt}',
+                              style: TextStyle(
+                                color: sch.textDim,
+                                fontSize: 11,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: device.enabled,
+                      onChanged: (_) => _toggleNotificationDevice(device),
+                    ),
+                    IconButton(
+                      tooltip: 'Delete',
+                      onPressed: () => _deleteNotificationDevice(device),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   Widget _sortMenuBtn() {
     return PopupMenuButton<_SortOrder>(

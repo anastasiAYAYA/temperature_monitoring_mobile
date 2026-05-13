@@ -21,6 +21,8 @@ class _SchemaViewport extends StatefulWidget {
 
 class _SchemaViewportState extends State<_SchemaViewport> {
   double? _aspectRatio;
+  double? _imageWidth;
+  double? _imageHeight;
 
   @override
   void initState() {
@@ -37,7 +39,13 @@ class _SchemaViewportState extends State<_SchemaViewport> {
         if (!mounted) return;
         final w = info.image.width.toDouble();
         final h = info.image.height.toDouble();
-        if (h > 0) setState(() => _aspectRatio = w / h);
+        if (h > 0) {
+          setState(() {
+            _aspectRatio = w / h;
+            _imageWidth = w;
+            _imageHeight = h;
+          });
+        }
       }),
     );
   }
@@ -76,8 +84,8 @@ class _SchemaViewportState extends State<_SchemaViewport> {
                 ),
                 ...widget.sensors.map(
                   (sensor) => Positioned(
-                    left: sensor.x * width,
-                    top: sensor.y * height,
+                    left: _coordToPixels(sensor.x, width, _imageWidth),
+                    top: _coordToPixels(sensor.y, height, _imageHeight),
                     child: FractionalTranslation(
                       translation: const Offset(-0.5, -0.5),
                       child: SensorDot(state: sensor.state, sensor: sensor),
@@ -90,6 +98,15 @@ class _SchemaViewportState extends State<_SchemaViewport> {
         );
       },
     );
+  }
+
+  double _coordToPixels(double value, double viewSize, double? imageSize) {
+    if (value <= 1.0) return value * viewSize;
+    final sourceSize = imageSize;
+    if (sourceSize == null || sourceSize <= 0) {
+      return value.clamp(0.0, viewSize);
+    }
+    return (value / sourceSize * viewSize).clamp(0.0, viewSize);
   }
 }
 
@@ -113,6 +130,8 @@ class _EditableSchema extends StatefulWidget {
 
 class _EditableSchemaState extends State<_EditableSchema> {
   double? _aspectRatio;
+  double? _imageWidth;
+  double? _imageHeight;
 
   @override
   void initState() {
@@ -129,7 +148,13 @@ class _EditableSchemaState extends State<_EditableSchema> {
         if (!mounted) return;
         final w = info.image.width.toDouble();
         final h = info.image.height.toDouble();
-        if (h > 0) setState(() => _aspectRatio = w / h);
+        if (h > 0) {
+          setState(() {
+            _aspectRatio = w / h;
+            _imageWidth = w;
+            _imageHeight = h;
+          });
+        }
       }),
     );
   }
@@ -183,6 +208,8 @@ class _EditableSchemaState extends State<_EditableSchema> {
                   sensor: s,
                   schemaWidth: width,
                   schemaHeight: height,
+                  imageWidth: _imageWidth,
+                  imageHeight: _imageHeight,
                   onPanUpdate: (delta) => widget.onPanUpdate(s, delta),
                 ),
               ),
@@ -201,11 +228,15 @@ class _SmoothDraggableDot extends StatefulWidget {
     required this.sensor,
     required this.schemaWidth,
     required this.schemaHeight,
+    required this.imageWidth,
+    required this.imageHeight,
     required this.onPanUpdate,
   });
   final SensorModel sensor;
   final double schemaWidth;
   final double schemaHeight;
+  final double? imageWidth;
+  final double? imageHeight;
   final void Function(Offset delta) onPanUpdate;
 
   @override
@@ -220,8 +251,16 @@ class _SmoothDraggableDotState extends State<_SmoothDraggableDot> {
   Widget build(BuildContext context) {
     const cardW = 62.0;
     const cardH = 36.0;
-    final px = widget.sensor.x * widget.schemaWidth - cardW / 2;
-    final py = widget.sensor.y * widget.schemaHeight - cardH / 2;
+    final px =
+        _coordToPixels(widget.sensor.x, widget.schemaWidth, widget.imageWidth) -
+        cardW / 2;
+    final py =
+        _coordToPixels(
+          widget.sensor.y,
+          widget.schemaHeight,
+          widget.imageHeight,
+        ) -
+        cardH / 2;
 
     return Positioned(
       left: px.clamp(0.0, widget.schemaWidth - cardW),
@@ -260,4 +299,13 @@ class _SmoothDraggableDotState extends State<_SmoothDraggableDot> {
     SensorState.warning => c.orange,
     SensorState.critical => c.red,
   };
+
+  double _coordToPixels(double value, double viewSize, double? imageSize) {
+    if (value <= 1.0) return value * viewSize;
+    final sourceSize = imageSize;
+    if (sourceSize == null || sourceSize <= 0) {
+      return value.clamp(0.0, viewSize);
+    }
+    return (value / sourceSize * viewSize).clamp(0.0, viewSize);
+  }
 }

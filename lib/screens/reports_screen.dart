@@ -47,27 +47,25 @@ const List<_Period> _kPeriods = [
   _Period('Произвольный', 'custom'),
 ];
 
-// Количество точек для каждого периода.
-// API принимает только limit — сервер сам выбирает последние N записей.
-// Чем длиннее период — тем больше точек запрашиваем.
 const Map<String, int> _kHistoryLimit = {
-  'last_24_hours': 288, // ~5 мин между точками за 24 ч
-  'last_week': 336, // ~30 мин между точками за 7 дней
-  'last_month': 480, // ~90 мин между точками за 30 дней
+  'last_24_hours': 288,
+  'last_week': 336,
+  'last_month': 480,
   'last_2_months': 720,
   'last_3_months': 900,
   'last_6_months': 1000,
   'last_year': 1000,
 };
 
-enum _ReportTarget { sensor, location, controlUnit, locationAlarms }
+/// Объект отчёта: датчик / ЦБУ / локация
+enum _ReportTarget { sensor, controlUnit, location }
 
-/// Отчёты и превью: история через `GET .../telemetry/{id}/history?limit=...` (см. [_fetchSensorPoints]),
+/// Тип отчёта: полный (телеметрия + тревоги) или только журнал событий
+enum _ReportKind { telemetry, events }
+
+/// Отчёты и превью: история через `GET .../telemetry/{id}/history?limit=...`,
 /// файл — `downloadReportByPeriod` / `downloadLocationReportByPeriod`. На мобильном файл сохраняется
 /// во временный каталог через `path_provider` и открывается через `open_file`.
-///
-/// Режим «локация»: для каждого датчика группы запрашивается история, затем покомпонентное усреднение
-/// по минимальной длине рядов ([_loadLocationChart]) — упрощённая агрегация для дипломного прототипа.
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key, required this.repo});
 
@@ -79,21 +77,17 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen> {
   _ReportTarget _target = _ReportTarget.sensor;
+  _ReportKind _kind = _ReportKind.telemetry;
 
   // ── Выбранные ID ───────────────────────────────────────────────────────────
-  int? _selectedSensorId; // для режима sensor
-  int?
-  _selectedLocationId; // для режимов location / locationAlarms / фильтр sensor+CU
-  int? _selectedControlUnitId; // для режима controlUnit / фильтр sensor
+  int? _selectedSensorId;
+  int? _selectedLocationId;
+  int? _selectedControlUnitId;
 
   // ── Поиск / фильтр ─────────────────────────────────────────────────────────
-  // Общий поиск по компаниям (используется во всех режимах для фильтра locationId)
   final TextEditingController _locationSearchController =
       TextEditingController();
   String _locationSearchQuery = '';
-
-  // Для датчиков: дополнительный фильтр по ЦБУ внутри выбранной компании
-  // null = показывать все датчики компании
   int? _filterControlUnitId;
 
   // ── Период / формат ─────────────────────────────────────────────────────────
@@ -108,9 +102,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   String? _chartError;
   bool _reportLoading = false;
 
-  // ── Геттеры отфильтрованных списков ────────────────────────────────────────
+  // ── Геттеры ────────────────────────────────────────────────────────────────
 
-  /// Локации, отфильтрованные по строке поиска
   List<LocationModel> get _filteredLocations {
     final q = _locationSearchQuery;
     if (q.isEmpty) return widget.repo.locations;
@@ -119,7 +112,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
         .toList();
   }
 
-  /// ЦБУ текущей выбранной компании (для фильтра датчиков и режима ЦБУ)
   List<Map<String, dynamic>> get _locationControlUnits {
     if (_selectedLocationId == null) return widget.repo.controlUnits;
     return widget.repo.controlUnits
@@ -127,7 +119,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
         .toList();
   }
 
-  /// Датчики выбранной компании, дополнительно отфильтрованные по ЦБУ
   List<SensorModel> get _filteredSensors {
     var list = widget.repo.sensors
         .where(
@@ -143,17 +134,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return list;
   }
 
+  /// Events-отчёт поддерживает только pdf и xlsx
+  bool get _isEventsMode => _kind == _ReportKind.events;
+
   @override
   void initState() {
     super.initState();
-    // Инициализируем выбор первыми значениями из списков
     _selectedLocationId = widget.repo.locations.isNotEmpty
         ? widget.repo.locations.first.id
         : null;
     _selectedControlUnitId = widget.repo.controlUnits.isNotEmpty
         ? (widget.repo.controlUnits.first['id'] as num?)?.toInt()
         : null;
-    // Датчик — первый в текущей компании
     final initSensors = _selectedLocationId == null
         ? widget.repo.sensors
         : widget.repo.sensors
@@ -169,7 +161,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
     super.dispose();
   }
 
-  /// При смене компании — сбрасываем зависимые выборы и перезагружаем
   void _onLocationChanged(int? locationId) {
     final cus = widget.repo.controlUnits
         .where((u) => (u['group_id'] as num?)?.toInt() == locationId)
@@ -182,14 +173,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
     setState(() {
       _selectedLocationId = locationId;
       _selectedControlUnitId = newCuId;
-      _filterControlUnitId = null; // сбрасываем фильтр по ЦБУ
+      _filterControlUnitId = null;
       _selectedSensorId = newSensorId;
       _chartPoints = [];
     });
     _loadChart();
   }
 
-  /// При смене фильтра ЦБУ для датчиков — выбираем первый подходящий датчик
   void _onFilterCuChanged(int? cuId) {
     final sens = widget.repo.sensors
         .where(
@@ -209,6 +199,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
   // ── Загрузка графика ──────────────────────────────────────────────────────
 
   Future<void> _loadChart() async {
+    // В режиме events графика нет
+    if (_kind == _ReportKind.events) {
+      setState(() {
+        _chartPoints = [];
+        _chartLoading = false;
+        _chartError = null;
+      });
+      return;
+    }
+
     setState(() {
       _chartLoading = true;
       _chartError = null;
@@ -221,12 +221,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
         await _loadLocationChart(_selectedLocationId);
       } else if (_target == _ReportTarget.controlUnit) {
         await _loadControlUnitChart(_selectedControlUnitId);
-      } else {
-        // locationAlarms — нет графика телеметрии, просто сброс
-        setState(() {
-          _chartPoints = [];
-          _chartLoading = false;
-        });
       }
     } catch (e) {
       if (mounted) {
@@ -294,7 +288,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
       final avgHum =
           nonEmpty.map((r) => r[i].humidity).reduce((a, b) => a + b) /
           nonEmpty.length;
-      // Берём timestamp из первого датчика — время измерения одинаково для всех
       return _TelemetryPoint(
         temperature: avgTemp,
         humidity: avgHum,
@@ -316,7 +309,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
       });
       return;
     }
-    // Собираем все датчики этого ЦБУ
     final sensorIds = widget.repo.sensors
         .where((s) => s.controlUnitId == controlUnitId)
         .map((s) => s.id)
@@ -362,8 +354,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Future<List<_TelemetryPoint>> _fetchSensorPoints(int sensorId) async {
-    // По спецификации единственный параметр — limit.
-    // Сервер возвращает последние N измерений, отсортированных по времени.
     final limit = _kHistoryLimit[_period.apiValue] ?? 480;
     final r = await widget.repo.get(
       '/telemetry/$sensorId/history?limit=$limit',
@@ -377,7 +367,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
         measurements = body;
       } else if (body is Map<String, dynamic>) {
         measurements = (body['measurements'] as List<dynamic>?) ?? [];
-        // Если measurements пуст, но есть latest — показываем хотя бы его
         if (measurements.isEmpty && body['latest'] != null) {
           measurements = [body['latest']];
         }
@@ -386,7 +375,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
       return [];
     }
 
-    // Парсим все три поля вместе — индексы points и timestamps всегда в синхроне
     final result = <_TelemetryPoint>[];
     for (final raw in measurements) {
       final m = raw as Map<String, dynamic>;
@@ -396,8 +384,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       DateTime? ts;
       try {
         final tsRaw = m['timestamp'] as String?;
-        if (tsRaw != null)
-          ts = DateTime.parse(tsRaw); // UTC → будет toLocal() в графике
+        if (tsRaw != null) ts = DateTime.parse(tsRaw);
       } catch (_) {}
       result.add(
         _TelemetryPoint(temperature: temp, humidity: hum, timestamp: ts),
@@ -449,77 +436,91 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
     setState(() => _reportLoading = true);
     try {
-      // Все методы репозитория возвращают record ({bytes, fileName, error}).
       List<int>? bytes;
       String fileName = '';
 
-      if (_target == _ReportTarget.sensor && _selectedSensorId != null) {
-        final r = await widget.repo.downloadReportByPeriod(
-          sensorId: _selectedSensorId!,
-          period: _period.apiValue,
-          format: _format,
-          startDate: _startDate,
-          endDate: _endDate,
-        );
-        if (r.error != null) {
-          _snack(r.error!);
-          return;
+      if (_kind == _ReportKind.telemetry) {
+        // ── Полные отчёты (телеметрия + тревоги) ──────────────────────────
+        if (_target == _ReportTarget.sensor && _selectedSensorId != null) {
+          final r = await widget.repo.downloadReportByPeriod(
+            sensorId: _selectedSensorId!,
+            period: _period.apiValue,
+            format: _format,
+            startDate: _startDate,
+            endDate: _endDate,
+          );
+          if (r.error != null) { _snack(r.error!); return; }
+          bytes = r.bytes;
+          fileName = r.fileName ??
+              'sensor_${_selectedSensorId}_${_period.apiValue}.$_format';
+        } else if (_target == _ReportTarget.controlUnit &&
+            _selectedControlUnitId != null) {
+          final r = await widget.repo.downloadControlUnitReportByPeriod(
+            controlUnitId: _selectedControlUnitId!,
+            period: _period.apiValue,
+            format: _format,
+            startDate: _startDate,
+            endDate: _endDate,
+          );
+          if (r.error != null) { _snack(r.error!); return; }
+          bytes = r.bytes;
+          fileName = r.fileName ??
+              'control_unit_${_selectedControlUnitId}_${_period.apiValue}.$_format';
+        } else if (_target == _ReportTarget.location &&
+            _selectedLocationId != null) {
+          final r = await widget.repo.downloadLocationReportByPeriod(
+            locationId: _selectedLocationId!,
+            period: _period.apiValue,
+            format: _format,
+            startDate: _startDate,
+            endDate: _endDate,
+          );
+          if (r.error != null) { _snack(r.error!); return; }
+          bytes = r.bytes;
+          fileName = r.fileName ??
+              'location_${_selectedLocationId}_${_period.apiValue}.$_format';
         }
-        bytes = r.bytes;
-        fileName =
-            r.fileName ??
-            'sensor_${_selectedSensorId}_${_period.apiValue}.$_format';
-      } else if (_target == _ReportTarget.location &&
-          _selectedLocationId != null) {
-        final r = await widget.repo.downloadLocationReportByPeriod(
-          locationId: _selectedLocationId!,
-          period: _period.apiValue,
-          format: _format,
-          startDate: _startDate,
-          endDate: _endDate,
-        );
-        if (r.error != null) {
-          _snack(r.error!);
-          return;
+      } else {
+        // ── Отчёты только по событиям ──────────────────────────────────────
+        if (_target == _ReportTarget.sensor && _selectedSensorId != null) {
+          final r = await widget.repo.downloadSensorEventsReport(
+            sensorId: _selectedSensorId!,
+            period: _period.apiValue,
+            format: _format,
+            startDate: _startDate,
+            endDate: _endDate,
+          );
+          if (r.error != null) { _snack(r.error!); return; }
+          bytes = r.bytes;
+          fileName = r.fileName ??
+              'events_sensor_${_selectedSensorId}_${_period.apiValue}.$_format';
+        } else if (_target == _ReportTarget.controlUnit &&
+            _selectedControlUnitId != null) {
+          final r = await widget.repo.downloadControlUnitEventsReport(
+            controlUnitId: _selectedControlUnitId!,
+            period: _period.apiValue,
+            format: _format,
+            startDate: _startDate,
+            endDate: _endDate,
+          );
+          if (r.error != null) { _snack(r.error!); return; }
+          bytes = r.bytes;
+          fileName = r.fileName ??
+              'events_cu_${_selectedControlUnitId}_${_period.apiValue}.$_format';
+        } else if (_target == _ReportTarget.location &&
+            _selectedLocationId != null) {
+          final r = await widget.repo.downloadLocationAlarmsReport(
+            locationId: _selectedLocationId!,
+            period: _period.apiValue,
+            format: _format,
+            startDate: _startDate,
+            endDate: _endDate,
+          );
+          if (r.error != null) { _snack(r.error!); return; }
+          bytes = r.bytes;
+          fileName = r.fileName ??
+              'events_location_${_selectedLocationId}_${_period.apiValue}.$_format';
         }
-        bytes = r.bytes;
-        fileName =
-            r.fileName ??
-            'location_${_selectedLocationId}_${_period.apiValue}.$_format';
-      } else if (_target == _ReportTarget.controlUnit &&
-          _selectedControlUnitId != null) {
-        final r = await widget.repo.downloadControlUnitReportByPeriod(
-          controlUnitId: _selectedControlUnitId!,
-          period: _period.apiValue,
-          format: _format,
-          startDate: _startDate,
-          endDate: _endDate,
-        );
-        if (r.error != null) {
-          _snack(r.error!);
-          return;
-        }
-        bytes = r.bytes;
-        fileName =
-            r.fileName ??
-            'control_unit_${_selectedControlUnitId}_${_period.apiValue}.$_format';
-      } else if (_target == _ReportTarget.locationAlarms &&
-          _selectedLocationId != null) {
-        final r = await widget.repo.downloadLocationAlarmsReport(
-          locationId: _selectedLocationId!,
-          period: _period.apiValue,
-          format: _format,
-          startDate: _startDate,
-          endDate: _endDate,
-        );
-        if (r.error != null) {
-          _snack(r.error!);
-          return;
-        }
-        bytes = r.bytes;
-        fileName =
-            r.fileName ??
-            'alarms_location_${_selectedLocationId}_${_period.apiValue}.$_format';
       }
 
       if (!mounted) return;
@@ -535,8 +536,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Future<void> _saveAndOpen(List<int> bytes, String fileName) async {
     try {
-      // Сохраняем файл во временный каталог приложения и открываем его
-      // сторонним приложением (просмотрщик PDF, Excel, и т.д.)
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/$fileName');
       await file.writeAsBytes(bytes, flush: true);
@@ -563,7 +562,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
   SensorModel? get _currentSensor =>
       widget.repo.sensors.where((s) => s.id == _selectedSensorId).firstOrNull;
 
-  /// Переводит apiValue → строку периода для LineChartWidget (формат меток оси X)
   String get _chartPeriod {
     switch (_period.apiValue) {
       case 'last_24_hours':
@@ -571,7 +569,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       case 'last_week':
         return 'Неделя';
       default:
-        return 'Месяц'; // месяц и длиннее — показываем дд.мм
+        return 'Месяц';
     }
   }
 
@@ -583,7 +581,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
           .firstOrNull;
       return unit?['name'] as String? ?? '—';
     }
-    // location и locationAlarms — показываем название локации
     return widget.repo.locations
             .where((l) => l.id == _selectedLocationId)
             .firstOrNull
@@ -596,8 +593,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final c = AppColors.of(context);
-    final sensors = widget.repo.sensors;
-    final locations = widget.repo.locations;
 
     return Container(
       color: c.bg,
@@ -616,7 +611,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
           const SizedBox(height: 16),
 
-          // ── Переключатель режима ─────────────────────────────────────────────
+          // ── Источник данных ──────────────────────────────────────────────────
           _SectionCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -624,7 +619,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 const _SectionLabel('Источник данных'),
                 const SizedBox(height: 10),
 
-                // Табы режима
+                // Табы объекта
                 Wrap(
                   spacing: 8,
                   runSpacing: 6,
@@ -662,30 +657,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         _loadChart();
                       },
                     ),
-                    _ToggleTab(
-                      label: 'Уведомления',
-                      selected: _target == _ReportTarget.locationAlarms,
-                      onTap: () {
-                        setState(() {
-                          _target = _ReportTarget.locationAlarms;
-                          _chartPoints = [];
-                        });
-                        _loadChart();
-                      },
-                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
 
-                // ── Шаг 1 для всех режимов: выбор компании (с поиском) ──────────
+                // Выбор компании (поиск + дропдаун)
                 _CompanyFilterBlock(
                   searchController: _locationSearchController,
                   searchQuery: _locationSearchQuery,
                   filteredLocations: _filteredLocations,
                   selectedLocationId: _selectedLocationId,
-                  labelSuffix: _target == _ReportTarget.locationAlarms
-                      ? ' (уведомления)'
-                      : '',
+                  labelSuffix: '',
                   onSearchChanged: (v) => setState(
                     () => _locationSearchQuery = v.trim().toLowerCase(),
                   ),
@@ -696,10 +678,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   onLocationChanged: _onLocationChanged,
                 ),
 
-                // ── Шаг 2а: режим «По датчику» — фильтр ЦБУ → датчик ─────────
+                // Фильтр ЦБУ + датчик (режим «По датчику»)
                 if (_target == _ReportTarget.sensor) ...[
                   const SizedBox(height: 10),
-                  // Суб-фильтр по ЦБУ (необязательный)
                   _StyledDropdown<int?>(
                     label: 'Фильтр по ЦБУ (необязательно)',
                     value: _filterControlUnitId,
@@ -723,7 +704,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     onChanged: _onFilterCuChanged,
                   ),
                   const SizedBox(height: 10),
-                  // Итоговый список датчиков после фильтрации
                   if (_filteredSensors.isEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
@@ -760,7 +740,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     ),
                 ],
 
-                // ── Шаг 2б: режим «По ЦБУ» — список ЦБУ компании ───────────
+                // Список ЦБУ (режим «По ЦБУ»)
                 if (_target == _ReportTarget.controlUnit) ...[
                   const SizedBox(height: 10),
                   if (_locationControlUnits.isEmpty)
@@ -801,7 +781,56 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     ),
                 ],
 
-                // режимы «По локации» и «Уведомления» — дополнительных шагов нет
+                const SizedBox(height: 14),
+
+                // ── Тип отчёта ─────────────────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: c.card2,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: c.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _KindTab(
+                          icon: Icons.bar_chart_rounded,
+                          label: 'Телеметрия',
+                          sublabel: 'KPI + графики + тревоги',
+                          selected: _kind == _ReportKind.telemetry,
+                          onTap: () {
+                            if (_kind == _ReportKind.telemetry) return;
+                            setState(() {
+                              _kind = _ReportKind.telemetry;
+                              if (_format == 'csv') _format = 'xlsx';
+                            });
+                            _loadChart();
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: _KindTab(
+                          icon: Icons.notifications_outlined,
+                          label: 'События',
+                          sublabel: 'Журнал тревог',
+                          selected: _kind == _ReportKind.events,
+                          onTap: () {
+                            if (_kind == _ReportKind.events) return;
+                            setState(() {
+                              _kind = _ReportKind.events;
+                              // CSV недоступен для events-отчётов
+                              if (_format == 'csv') _format = 'xlsx';
+                              _chartPoints = [];
+                              _chartLoading = false;
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -862,7 +891,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   }).toList(),
                 ),
 
-                // Кастомные даты
                 if (_period.apiValue == 'custom') ...[
                   const SizedBox(height: 12),
                   Row(
@@ -927,7 +955,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
           const SizedBox(height: 10),
 
-          // ── Графики ──────────────────────────────────────────────────────────
+          // ── Графики (только для телеметрии) ─────────────────────────────────
           _SectionCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -939,7 +967,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     if ((_target == _ReportTarget.location ||
                             _target == _ReportTarget.controlUnit) &&
                         !_chartLoading &&
-                        _chartPoints.isNotEmpty)
+                        _chartPoints.isNotEmpty &&
+                        _kind == _ReportKind.telemetry)
                       Text(
                         _target == _ReportTarget.controlUnit
                             ? 'Среднее по ЦБУ'
@@ -953,12 +982,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                if (_target == _ReportTarget.locationAlarms) ...[
-                  // Для режима уведомлений — нет телеметрии, показываем подсказку
+                if (_kind == _ReportKind.events) ...[
+                  // Заглушка для режима событий
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
-                      vertical: 16,
+                      vertical: 20,
                       horizontal: 12,
                     ),
                     decoration: BoxDecoration(
@@ -975,8 +1004,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Отчёт уведомлений содержит историю тревог\n'
-                          'по всем датчикам локации за выбранный период.',
+                          'Журнал событий не содержит\nграфиков телеметрии.',
                           style: TextStyle(
                             color: AppColors.of(context).textDim,
                             fontSize: 12,
@@ -987,7 +1015,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     ),
                   ),
                 ] else ...[
-                  // Температура
                   _ChartBlock(
                     label: 'Температура',
                     unit: '°C',
@@ -1005,7 +1032,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   const SizedBox(height: 2),
                   Divider(height: 20, color: AppColors.of(context).border),
 
-                  // Влажность
                   _ChartBlock(
                     label: 'Влажность',
                     unit: '%',
@@ -1034,55 +1060,52 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 const _SectionLabel('Скачать отчёт'),
                 const SizedBox(height: 10),
 
-                // Формат (скрываем для уведомлений — они всегда PDF)
-                if (_format == 'xlsx' || _format == 'pdf')
-                  Row(
-                    children: [
-                      _FormatButton(
-                        label: 'Excel (XLSX)',
-                        selected: _format == 'xlsx',
-                        onTap: () => setState(() => _format = 'xlsx'),
-                      ),
+                // Формат — CSV только для телеметрии
+                Row(
+                  children: [
+                    _FormatButton(
+                      label: 'Excel (XLSX)',
+                      selected: _format == 'xlsx',
+                      onTap: () => setState(() => _format = 'xlsx'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FormatButton(
+                      label: 'PDF',
+                      selected: _format == 'pdf',
+                      onTap: () => setState(() => _format = 'pdf'),
+                    ),
+                    if (_kind == _ReportKind.telemetry) ...[
                       const SizedBox(width: 8),
                       _FormatButton(
-                        label: 'PDF',
-                        selected: _format == 'pdf',
-                        onTap: () => setState(() => _format = 'pdf'),
+                        label: 'CSV',
+                        selected: _format == 'csv',
+                        onTap: () => setState(() => _format = 'csv'),
                       ),
                     ],
-                  )
-                else
-                  // Уведомления — печатаем PDF-бедж
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.of(context).cyan.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(7),
-                      border: Border.all(
-                        color: AppColors.of(context).cyan.withOpacity(0.3),
+                  ],
+                ),
+
+                // Подсказка для events: доступны только PDF и XLSX
+                if (_kind == _ReportKind.events) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 13,
+                        color: AppColors.of(context).textDim,
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.picture_as_pdf_outlined,
-                          color: AppColors.of(context).cyan,
-                          size: 16,
+                      const SizedBox(width: 5),
+                      Text(
+                        'Журнал событий: доступны PDF и XLSX',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.of(context).textDim,
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Отчёт уведомлений всегда выгружается в формате PDF',
-                          style: TextStyle(
-                            color: AppColors.of(context).cyan,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
+                ],
 
                 const SizedBox(height: 12),
 
@@ -1107,10 +1130,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           ? '${_fmt(_startDate!)} — ${_fmt(_endDate!)}'
                           : _period.label;
                       final formatStr = _format.toUpperCase();
-                      final typeStr = _target == _ReportTarget.locationAlarms
-                          ? 'Уведомления'
+                      final kindStr = _kind == _ReportKind.events
+                          ? 'Журнал событий'
                           : 'Телеметрия';
-                      return '$_targetLabel  ·  $periodStr  ·  $typeStr  ·  $formatStr';
+                      return '$_targetLabel  ·  $periodStr  ·  $kindStr  ·  $formatStr';
                     }(),
                     style: TextStyle(
                       fontSize: 12,
@@ -1170,8 +1193,68 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 }
 
+// ── Таб типа отчёта (Телеметрия / События) ───────────────────────────────────
+
+class _KindTab extends StatelessWidget {
+  const _KindTab({
+    required this.icon,
+    required this.label,
+    required this.sublabel,
+    required this.selected,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final String sublabel;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    final color = selected ? c.cyan : c.textDim;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: selected ? c.cyan.withOpacity(0.10) : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(
+            color: selected ? c.cyan.withOpacity(0.5) : Colors.transparent,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
+                  Text(
+                    sublabel,
+                    style: TextStyle(fontSize: 10, color: c.textDim),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Виджеты-компоненты
 // ─────────────────────────────────────────────────────────────────────────────
-
-/// Блок выбора компании (поиск + дропдаун). Используется во всех четырёх режимах.

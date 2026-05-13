@@ -2,7 +2,7 @@ part of '../app_repository.dart';
 
 extension AppRepositoryParsing on AppRepository {
   double _normalizePos(double v) =>
-      v <= 1.0 ? v.clamp(0.0, 1.0) : 0.5; // относительные координаты или центр
+      v <= 1.0 ? v.clamp(0.0, 1.0) : v; // относительные координаты или центр
 
   /// Парсит порог из JSON.
   /// null → не задан. Любое число включая 0.0 → валидное значение.

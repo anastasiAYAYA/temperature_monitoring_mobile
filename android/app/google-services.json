@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1011422387097",
+    "project_id": "temperaturakz",
+    "storage_bucket": "temperaturakz.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1011422387097:android:68fd3bc382edea919f5108",
+        "android_client_info": {
+          "package_name": "com.temperaturakz.temperatura"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCiWtk8hvRHJF8EJOp_hzTztR0hY9wJgNY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

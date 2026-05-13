@@ -14,6 +14,9 @@ import '../models/sensor_model.dart'; // модель датчика
 import '../models/user_role.dart'; // модель роли пользователя
 import '../models/user_model.dart'; // модель пользователя
 
+import '../models/notification_device_model.dart';
+import 'push_notification_service.dart';
+
 part 'app_repository/common.dart';
 part 'app_repository/auth_profile.dart';
 part 'app_repository/loaders.dart';
@@ -21,6 +24,7 @@ part 'app_repository/websocket.dart';
 part 'app_repository/alarms_sensors.dart';
 part 'app_repository/control_units.dart';
 part 'app_repository/locations_reports.dart';
+part 'app_repository/notifications.dart';
 part 'app_repository/users_audit.dart';
 part 'app_repository/parsing.dart';
 part 'app_repository/http_helpers.dart';
@@ -28,6 +32,8 @@ part 'app_repository/http_helpers.dart';
 const _kTimeout = Duration(seconds: 12);
 
 class AppRepository {
+  String? currentTelegramChatId;
+  bool currentNotificationsEnabled = true;
   // класс для работы с данными
   String baseUrl = 'http://157.90.127.202:8000/api/v1'; // базовый URL
   String? token; // токен авторизации
@@ -46,6 +52,10 @@ class AppRepository {
   List<Map<String, dynamic>> controlUnits = []; // список ЦБУ
 
   WebSocket? _wsChannel; // активное WS-соединение
+  List<NotificationDeviceModel> notificationDevices = [];
+  StreamSubscription<String>? _pushTokenRefreshSub;
+  String? _registeredPushToken;
+
   void Function(int sensorId, double temp, double hum, bool isAlarm)?
   _wsCallback;
   void Function(int sensorId, double posX, double posY, int? groupId)?

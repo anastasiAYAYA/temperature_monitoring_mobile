@@ -2,61 +2,58 @@ part of '../app_repository.dart';
 
 extension AppRepositoryHttpHelpers on AppRepository {
   String? parseError(String body) {
-    // достать detail из типичного FastAPI ответа
     try {
-      final decoded =
-          jsonDecode(body) as Map<String, dynamic>; // JSON объект ошибки
-      return decoded['detail'] as String?; // строка для пользователя
+      final decoded = jsonDecode(body) as Map<String, dynamic>;
+      return decoded['detail'] as String?;
     } catch (_) {
       return null;
-    } // не JSON — без detail
+    }
   }
 
-  // ── HTTP хелперы ──────────────────────────────────────────────────────────
-
-  Future<http.Response> get(String path) => // GET с Bearer
-  http
+  Future<http.Response> get(String path) => http
       .get(
-        Uri.parse('$baseUrl$path'), // полный URL
+        Uri.parse('$baseUrl$path'),
         headers: {'Authorization': 'Bearer $token'},
       )
-      .timeout(_kTimeout); // JWT и таймаут
+      .timeout(_kTimeout);
 
-  Future<http.Response> post(
-    String path,
-    Map<String, dynamic> body,
-  ) => // POST JSON
-  http
+  Future<http.Response> post(String path, Map<String, dynamic> body) => http
       .post(
-        Uri.parse('$baseUrl$path'), // URL
+        Uri.parse('$baseUrl$path'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
-        }, // заголовки
+        },
         body: jsonEncode(body),
       )
-      .timeout(_kTimeout); // сериализация тела
+      .timeout(_kTimeout);
 
-  Future<http.Response> patch(
-    String path,
-    Map<String, dynamic> body,
-  ) => // PATCH JSON
-  http
+  Future<http.Response> put(String path, Map<String, dynamic> body) => http
+      .put(
+        Uri.parse('$baseUrl$path'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      )
+      .timeout(_kTimeout);
+
+  Future<http.Response> patch(String path, Map<String, dynamic> body) => http
       .patch(
-        Uri.parse('$baseUrl$path'), // URL
+        Uri.parse('$baseUrl$path'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
-        }, // заголовки
+        },
         body: jsonEncode(body),
       )
-      .timeout(_kTimeout); // тело
+      .timeout(_kTimeout);
 
-  Future<http.Response> delete(String path) => // DELETE с Bearer
-  http
+  Future<http.Response> delete(String path) => http
       .delete(
-        Uri.parse('$baseUrl$path'), // URL
+        Uri.parse('$baseUrl$path'),
         headers: {'Authorization': 'Bearer $token'},
       )
-      .timeout(_kTimeout); // JWT и таймаут
+      .timeout(_kTimeout);
 }

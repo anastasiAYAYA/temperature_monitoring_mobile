@@ -40,6 +40,12 @@ extension AppRepositoryLoaders on AppRepository {
             title: newAlarms[i].title, // id и заголовок с сервера
             description: newAlarms[i].description, // описание с сервера
             status: newAlarms[i].status,
+            sensorId: newAlarms[i].sensorId,
+            severity: newAlarms[i].severity,
+            alarmType: newAlarms[i].alarmType,
+            timestamp: newAlarms[i].timestamp,
+            resolvedAt: newAlarms[i].resolvedAt,
+            resolvedById: newAlarms[i].resolvedById,
             comment: old.comment, // статус новый, комментарий старый
           );
         }
@@ -207,6 +213,7 @@ extension AppRepositoryLoaders on AppRepository {
       }
     }
 
+    await loadNotificationDevices();
     await loadSubordinates(); // подчинённые пользователи (admin/editor)
     await loadAuditLog(); // журнал аудита
     // Финальный пересчёт состояний датчиков по тревогам:
