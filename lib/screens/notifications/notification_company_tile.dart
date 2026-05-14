@@ -5,6 +5,7 @@ class _CompanyNotifTile extends StatelessWidget {
     required this.location,
     required this.newCount,
     required this.isMuted,
+    required this.isLoading,
     required this.onTap,
     required this.onMuteTap,
   });
@@ -12,6 +13,7 @@ class _CompanyNotifTile extends StatelessWidget {
   final LocationModel location;
   final int newCount;
   final bool isMuted;
+  final bool isLoading;
   final VoidCallback onTap;
   final VoidCallback onMuteTap;
 
@@ -76,7 +78,7 @@ class _CompanyNotifTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     isMuted
-                        ? 'Уведомления отключены'
+                        ? _mutedChannelsLabel(location)
                         : 'Нажмите чтобы посмотреть',
                     style: TextStyle(
                       fontSize: 11,
@@ -108,17 +110,26 @@ class _CompanyNotifTile extends StatelessWidget {
             ],
             // Кнопка отключения/включения уведомлений
             GestureDetector(
-              onTap: onMuteTap,
+              onTap: isLoading ? null : onMuteTap,
               behavior: HitTestBehavior.opaque,
               child: Padding(
                 padding: const EdgeInsets.only(left: 6, right: 2),
-                child: Icon(
-                  isMuted
-                      ? Icons.notifications_off_outlined
-                      : Icons.notifications_outlined,
-                  size: 18,
-                  color: isMuted ? kRed : AppColors.of(context).textDim,
-                ),
+                child: isLoading
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: isMuted ? kRed : AppColors.of(context).textDim,
+                        ),
+                      )
+                    : Icon(
+                        isMuted
+                            ? Icons.notifications_off_outlined
+                            : Icons.notifications_outlined,
+                        size: 18,
+                        color: isMuted ? kRed : AppColors.of(context).textDim,
+                      ),
               ),
             ),
             const SizedBox(width: 4),
@@ -131,6 +142,16 @@ class _CompanyNotifTile extends StatelessWidget {
         ),
       ),
     );
+  }
+  /// Возвращает подпись с перечислением отключённых каналов.
+  /// Если оба отключены — «Все уведомления отключены».
+  /// Если только один — «Push отключён» / «Telegram отключён».
+  String _mutedChannelsLabel(LocationModel location) {
+    final pushOff = !location.pushNotificationsEnabled;
+    final tgOff = !location.telegramNotificationsEnabled;
+    if (pushOff && tgOff) return 'Все уведомления отключены';
+    if (pushOff) return 'Push отключён';
+    return 'Telegram отключён';
   }
 }
 

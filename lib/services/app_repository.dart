@@ -35,7 +35,7 @@ class AppRepository {
   String? currentTelegramChatId;
   bool currentNotificationsEnabled = true;
   // класс для работы с данными
-  String baseUrl = 'http://157.90.127.202:8000/api/v1'; // базовый URL
+  String baseUrl = 'https://temperaturakz.duckdns.org/api/v1'; // базовый URL
   String? token; // токен авторизации
   String? currentUser; // текущий пользователь
   String? currentUserFullName; // полное имя текущего пользователя

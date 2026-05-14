@@ -60,6 +60,9 @@ extension AppRepositoryLocationsReports on AppRepository {
             id: locations[idx].id,
             name: locations[idx].name,
             imageUrl: newUrl,
+            pushNotificationsEnabled: locations[idx].pushNotificationsEnabled,
+            telegramNotificationsEnabled:
+                locations[idx].telegramNotificationsEnabled,
           );
         }
         return null;
@@ -89,6 +92,62 @@ extension AppRepositoryLocationsReports on AppRepository {
     if (r.statusCode != 200 && r.statusCode != 204) {
       return parseError(r.body) ??
           'Удаление локации недоступно на сервере (${r.statusCode})';
+    }
+    return null;
+  }
+
+  /// PATCH /notifications/location-preferences/{location_id}
+  /// Обновляет push и/или telegram уведомления локации только для текущего пользователя.
+  /// Другие пользователи этой локации продолжают получать свои уведомления независимо.
+  /// Обновляет поля [pushNotificationsEnabled] и [telegramNotificationsEnabled]
+  /// в локальном кеше из ответа сервера.
+  Future<String?> updateLocationNotificationPreferences({
+    required int locationId,
+    required bool pushNotificationsEnabled,
+    required bool telegramNotificationsEnabled,
+  }) async {
+    final r = await patch(
+      '/notifications/location-preferences/$locationId',
+      {
+        'push_notifications_enabled': pushNotificationsEnabled,
+        'telegram_notifications_enabled': telegramNotificationsEnabled,
+      },
+    );
+    if (r.statusCode != 200 && r.statusCode != 201) {
+      return parseError(r.body) ??
+          'Не удалось обновить настройки уведомлений (${r.statusCode})';
+    }
+    // Обновляем локальный кеш из ответа сервера
+    try {
+      final data = jsonDecode(r.body) as Map<String, dynamic>;
+      final push =
+          data['push_notifications_enabled'] as bool? ??
+          pushNotificationsEnabled;
+      final telegram =
+          data['telegram_notifications_enabled'] as bool? ??
+          telegramNotificationsEnabled;
+      final idx = locations.indexWhere((l) => l.id == locationId);
+      if (idx >= 0) {
+        locations[idx] = LocationModel(
+          id: locations[idx].id,
+          name: locations[idx].name,
+          imageUrl: locations[idx].imageUrl,
+          pushNotificationsEnabled: push,
+          telegramNotificationsEnabled: telegram,
+        );
+      }
+    } catch (_) {
+      // Если парсинг ответа не удался — применяем переданные значения
+      final idx = locations.indexWhere((l) => l.id == locationId);
+      if (idx >= 0) {
+        locations[idx] = LocationModel(
+          id: locations[idx].id,
+          name: locations[idx].name,
+          imageUrl: locations[idx].imageUrl,
+          pushNotificationsEnabled: pushNotificationsEnabled,
+          telegramNotificationsEnabled: telegramNotificationsEnabled,
+        );
+      }
     }
     return null;
   }

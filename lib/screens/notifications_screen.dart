@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../models/alarm_model.dart';
 import '../models/location_model.dart';
@@ -25,7 +25,8 @@ extension _SortOrderLabel on _SortOrder {
 /// Журнал событий (алармы): фильтр по статусу, сортировка, для admin — выбор компании.
 /// Связь с сущностями: `AlarmModel.sensorId` сопоставляется с датчиками локации через [AppRepository.sensors].
 /// Изменение статуса: `repo.updateAlarm` (PATCH), затем [onRefresh] для синхронизации с сервером.
-/// `_mutedLocationIds` хранится только в памяти клиента — заглушка до API отключения уведомлений.
+/// Настройки уведомлений хранятся на сервере: PATCH /notifications/location-preferences/{id}
+/// применяется только для текущего пользователя — другие пользователи не затрагиваются.
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({
@@ -51,7 +52,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   /// У admin: если задан — показываем тревоги только датчиков этой локации.
   int? _adminSelectedLocationId;
 
-  final Set<int> _mutedLocationIds = {};
+  // Множество id локаций, по которым идёт запрос (показываем индикатор загрузки)
+  final Set<int> _muteLoading = {};
 
   bool get _isAdmin => widget.repo.role == UserRole.admin;
 
@@ -275,136 +277,182 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   // ── Диалог отключения уведомлений ────────────────────────────────────────
 
+  /// Показывает диалог с двумя независимыми переключателями: Push и Telegram.
+  /// Изменения применяются только для текущего пользователя —
+  /// другие администраторы локации продолжают получать свои уведомления.
   Future<void> _showMuteDialog(LocationModel location) async {
-    final isMuted = _mutedLocationIds.contains(location.id);
+    // Текущие значения из кеша — инициализируем локальное состояние диалога
+    bool pushEnabled = location.pushNotificationsEnabled;
+    bool telegramEnabled = location.telegramNotificationsEnabled;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) {
         final sch = AppColors.of(ctx);
-        return AlertDialog(
-          backgroundColor: Theme.of(ctx).colorScheme.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: sch.border),
-          ),
-          title: Text(
-            isMuted ? 'Включить уведомления' : 'Отключить уведомления',
-            style: TextStyle(
-              color: sch.textMain,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: sch.card2,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: sch.border),
+        // StatefulBuilder нужен чтобы переключатели внутри диалога перерисовывались
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final allDisabled = !pushEnabled && !telegramEnabled;
+            return AlertDialog(
+              backgroundColor: Theme.of(ctx).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: sch.border),
+              ),
+              title: Text(
+                'Мои уведомления',
+                style: TextStyle(
+                  color: sch.textMain,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
                 ),
-                child: Row(
-                  children: [
-                    Icon(Icons.business_outlined, size: 16, color: kCyan),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        location.name,
-                        style: TextStyle(
-                          color: sch.textMain,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Карточка с именем локации
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: sch.card2,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: sch.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.business_outlined, size: 16, color: kCyan),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            location.name,
+                            style: TextStyle(
+                              color: sch.textMain,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
                         ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // Пояснение: настройки только для текущего пользователя
+                  Text(
+                    'Настройки применяются только для вас. '
+                    'Другие пользователи продолжат получать уведомления.',
+                    style: TextStyle(
+                      color: sch.textDim,
+                      fontSize: 12,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // ── Переключатель Push ─────────────────────────────────────
+                  _NotifToggleRow(
+                    icon: Icons.smartphone_outlined,
+                    label: 'Push-уведомления',
+                    value: pushEnabled,
+                    onChanged: (v) => setDialogState(() => pushEnabled = v),
+                    sch: sch,
+                  ),
+                  const SizedBox(height: 8),
+                  // ── Переключатель Telegram ─────────────────────────────────
+                  _NotifToggleRow(
+                    icon: Icons.send_outlined,
+                    label: 'Telegram-уведомления',
+                    value: telegramEnabled,
+                    onChanged: (v) => setDialogState(() => telegramEnabled = v),
+                    sch: sch,
+                  ),
+                  // Предупреждение если оба канала отключены
+                  if (allDisabled) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: kRed.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: kRed.withOpacity(0.25)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.notifications_off_outlined,
+                            size: 14,
+                            color: kRed,
+                          ),
+                          SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Все каналы отключены — вы не будете получать уведомления по этой локации',
+                              style: TextStyle(fontSize: 11, color: kRed),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text('Отмена', style: TextStyle(color: sch.textDim)),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                isMuted
-                    ? 'Уведомления для этой компании будут снова активированы.'
-                    : 'Все уведомления для этой компании будут отключены. '
-                          'Тревоги всё равно будут записываться, '
-                          'но пуш-уведомления приходить не будут.',
-                style: TextStyle(color: sch.textDim, fontSize: 13, height: 1.5),
-              ),
-              if (!isMuted) ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: kRed.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: kRed.withOpacity(0.25)),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: kCyan,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.warning_amber_outlined,
-                        size: 14,
-                        color: kRed,
-                      ),
-                      const SizedBox(width: 6),
-                      const Expanded(
-                        child: Text(
-                          'Функция в разработке — изменение сохраняется только локально',
-                          style: TextStyle(fontSize: 11, color: kRed),
-                        ),
-                      ),
-                    ],
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text(
+                    'Сохранить',
+                    style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
               ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Отмена', style: TextStyle(color: sch.textDim)),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: isMuted ? kGreen : kRed,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(
-                isMuted ? 'Включить' : 'Отключить',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
+            );
+          },
         );
       },
     );
 
     if (confirmed != true || !mounted) return;
 
-    setState(() {
-      if (isMuted) {
-        _mutedLocationIds.remove(location.id);
-      } else {
-        _mutedLocationIds.add(location.id);
-      }
-    });
+    setState(() => _muteLoading.add(location.id));
 
+    // PATCH /notifications/location-preferences/{id} — только для текущего пользователя
+    final err = await widget.repo.updateLocationNotificationPreferences(
+      locationId: location.id,
+      pushNotificationsEnabled: pushEnabled,
+      telegramNotificationsEnabled: telegramEnabled,
+    );
+
+    if (!mounted) return;
+    setState(() => _muteLoading.remove(location.id));
+
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), backgroundColor: kRed),
+      );
+      return;
+    }
+
+    final bothOff = !pushEnabled && !telegramEnabled;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          isMuted
-              ? 'Уведомления для «${location.name}» включены'
-              : 'Уведомления для «${location.name}» отключены',
+          bothOff
+              ? 'Уведомления для «${location.name}» отключены'
+              : 'Настройки уведомлений для «${location.name}» сохранены',
         ),
       ),
     );
+    setState(() {});
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -589,11 +637,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         ),
                         ...items.map((loc) {
                           final newCnt = _newCountForLocation(loc.id);
-                          final isMuted = _mutedLocationIds.contains(loc.id);
+                          final isMuted = !loc.notificationsEnabled;
+                          final isLoading = _muteLoading.contains(loc.id);
                           return _CompanyNotifTile(
                             location: loc,
                             newCount: newCnt,
                             isMuted: isMuted,
+                            isLoading: isLoading,
                             onTap: () => setState(
                               () => _adminSelectedLocationId = loc.id,
                             ),
@@ -613,9 +663,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _buildLocationAlarms(LocationModel? loc) {
     final alarms = _displayedAlarms;
-    final isMuted =
-        _adminSelectedLocationId != null &&
-        _mutedLocationIds.contains(_adminSelectedLocationId);
+    final isMuted = loc != null && !loc.notificationsEnabled;
+    final isLoading = loc != null && _muteLoading.contains(loc.id);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -667,7 +716,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   // Кнопка отключения уведомлений
                   if (loc != null)
                     GestureDetector(
-                      onTap: () => _showMuteDialog(loc),
+                      onTap: isLoading ? null : () => _showMuteDialog(loc),
                       child: Container(
                         margin: const EdgeInsets.only(right: 8),
                         padding: const EdgeInsets.symmetric(
@@ -685,31 +734,40 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 : AppColors.of(context).border,
                           ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isMuted
-                                  ? Icons.notifications_off_outlined
-                                  : Icons.notifications_outlined,
-                              size: 14,
-                              color: isMuted
-                                  ? kRed
-                                  : AppColors.of(context).textDim,
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              isMuted ? 'Выкл' : 'Вкл',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: isMuted
-                                    ? kRed
-                                    : AppColors.of(context).textDim,
+                        child: isLoading
+                            ? SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: isMuted ? kRed : AppColors.of(context).textDim,
+                                ),
+                              )
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isMuted
+                                        ? Icons.notifications_off_outlined
+                                        : Icons.notifications_outlined,
+                                    size: 14,
+                                    color: isMuted
+                                        ? kRed
+                                        : AppColors.of(context).textDim,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    isMuted ? 'Выкл' : 'Вкл',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: isMuted
+                                          ? kRed
+                                          : AppColors.of(context).textDim,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
                       ),
                     ),
                   // Сортировка
@@ -723,7 +781,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
         ),
 
-        // Предупреждение если уведомления отключены
+        // Предупреждение если уведомления отключены (только для текущего пользователя)
         if (isMuted)
           Container(
             margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
@@ -739,7 +797,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Уведомления для этой компании отключены',
+                    'Вы отключили уведомления по этой компании',
                     style: TextStyle(
                       fontSize: 12,
                       color: kRed,
@@ -944,6 +1002,61 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+// ── Строка переключателя канала уведомлений ───────────────────────────────────
+
+/// Переиспользуемая строка с иконкой, подписью и Switch для диалога настроек.
+class _NotifToggleRow extends StatelessWidget {
+  const _NotifToggleRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    required this.sch,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final AppScheme sch;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: sch.card2,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: value ? kCyan.withOpacity(0.35) : sch.border,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: value ? kCyan : sch.textDim),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: value ? sch.textMain : sch.textDim,
+                fontWeight: value ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: kCyan,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ],
+      ),
     );
   }
 }

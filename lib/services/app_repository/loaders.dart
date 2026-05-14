@@ -76,6 +76,7 @@ extension AppRepositoryLoaders on AppRepository {
               name: e['name'] as String? ?? '', // отображаемое имя
               imageUrl:
                   e['image_url'] as String?, // URL плана этажа (если есть)
+              // push/telegram флаги придут ниже из /notifications/location-preferences
             ),
           )
           .toList(); // список LocationModel
@@ -93,6 +94,12 @@ extension AppRepositoryLoaders on AppRepository {
           .map((e) => LocationModel(id: e.value, name: e.key))
           .toList(); // псевдо-локации
     }
+
+    // Загружаем персональные настройки уведомлений по локациям:
+    // GET /notifications/location-preferences — возвращает push/telegram флаги
+    // для текущего пользователя по каждой доступной ему локации.
+    // Мерджим поверх уже загруженных locations.
+    await _mergeLocationNotificationPreferences();
 
     // FIX: Обогащаем датчики реальными именами локаций из /locations/
     // sensorFromJson делает location = 'Локация #N', здесь заменяем на настоящее имя
@@ -230,6 +237,44 @@ extension AppRepositoryLoaders on AppRepository {
     // после обогащения ЦБУ (isOnline) и тревог — все данные актуальны.
     _applySensorAlarmStates();
     return null; // успех без сообщения
+  }
+
+  /// GET /notifications/location-preferences — загружает персональные настройки
+  /// push/telegram уведомлений текущего пользователя по каждой локации и
+  /// мерджит их в кеш [locations], сохраняя уже загруженные поля (name, imageUrl).
+  Future<void> _mergeLocationNotificationPreferences() async {
+    try {
+      final r = await get('/notifications/location-preferences'); // персональные настройки
+      if (r.statusCode != 200) return; // эндпоинт недоступен — оставляем дефолты
+
+      final list = jsonDecode(r.body); // ожидаем List<Map>
+      if (list is! List) return; // неожиданный формат — пропуск
+
+      // Строим карту location_id → флаги для быстрого поиска
+      final prefsById = <int, Map<String, dynamic>>{
+        for (final item in list)
+          if (item is Map<String, dynamic>)
+            ((item['location_id'] as num?)?.toInt() ?? -1): item,
+      };
+
+      // Обновляем только флаги уведомлений, остальные поля берём из кеша
+      locations = locations.map((loc) {
+        final prefs = prefsById[loc.id];
+        return LocationModel(
+          id: loc.id, // id не меняем
+          name: loc.name, // имя не меняем
+          imageUrl: loc.imageUrl, // план этажа не меняем
+          pushNotificationsEnabled:
+              prefs?['push_notifications_enabled'] as bool? ??
+              true, // дефолт — включено
+          telegramNotificationsEnabled:
+              prefs?['telegram_notifications_enabled'] as bool? ??
+              true, // дефолт — включено
+        );
+      }).toList();
+    } catch (_) {
+      // Сетевая ошибка или битый JSON — дефолты (true) уже выставлены в LocationModel
+    }
   }
 
   // ── GET /locations/{group_id}/details (только admin) ─────────────────────
