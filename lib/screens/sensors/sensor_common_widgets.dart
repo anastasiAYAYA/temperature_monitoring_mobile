@@ -132,7 +132,7 @@ class _DarkField extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(
-            color: readOnly ? sch.border.withOpacity(0.5) : kCyan,
+            color: readOnly ? sch.border.withOpacity(0.5) : sch.cyan,
           ),
         ),
         isDense: true,
@@ -170,7 +170,7 @@ class _DarkDropdown<T> extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: kCyan),
+          borderSide: BorderSide(color: sch.cyan),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
@@ -207,8 +207,8 @@ class _DarkFilledButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return FilledButton(
       style: FilledButton.styleFrom(
-        backgroundColor: kCyan,
-        foregroundColor: Colors.black,
+        backgroundColor: AppColors.of(context).cyan,
+        foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       onPressed: onTap,

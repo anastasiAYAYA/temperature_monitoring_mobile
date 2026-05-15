@@ -176,18 +176,18 @@ class _RootPageState extends State<RootPage> {
     ];
 
     final isDark = widget.isDark; // признак темной темы
-    final accent = isDark ? kAccent : kAccentDark;
+    final colors = AppThemeProvider.of(context).colors;
+    final accent = colors.accent;
+    final iconDim = isDark ? Colors.white38 : colors.textDim;
     final navBg = isDark
         ? const Color(0xFF0E0E0E)
-        : Colors.white; // цвет фона навигации
+        : colors.surface; // цвет фона навигации
     final appBarBg = isDark
         ? const Color(0xFF0A0A0A)
-        : Colors.white; // цвет фона AppBar
+        : colors.surface; // цвет фона AppBar
 
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF0A0A0A)
-          : const Color(0xFFF2F4F6), // цвет фона
+      backgroundColor: colors.bg, // цвет фона
       appBar: AppBar(
         backgroundColor: appBarBg, // цвет фона AppBar
         elevation: 0,
@@ -208,7 +208,7 @@ class _RootPageState extends State<RootPage> {
                 : _reload, // функция для перезагрузки данных
             icon: Icon(
               Icons.refresh, // иконка для перезагрузки данных
-              color: isDark ? Colors.white54 : Colors.black54,
+              color: isDark ? Colors.white54 : colors.textDim,
             ), // цвет иконки
           ),
           IconButton(
@@ -270,7 +270,7 @@ class _RootPageState extends State<RootPage> {
           NavigationDestination(
             icon: Icon(
               Icons.home_outlined, // иконка для главного экрана
-              color: isDark ? Colors.white38 : Colors.black38,
+              color: iconDim,
             ),
             selectedIcon: Icon(Icons.home, color: accent),
             label: 'Главная',
@@ -278,7 +278,7 @@ class _RootPageState extends State<RootPage> {
           NavigationDestination(
             icon: Icon(
               Icons.sensors_outlined, // иконка для экрана датчиков
-              color: isDark ? Colors.white38 : Colors.black38,
+              color: iconDim,
             ),
             selectedIcon: Icon(Icons.sensors, color: accent),
             label: 'Датчики',
@@ -286,7 +286,7 @@ class _RootPageState extends State<RootPage> {
           NavigationDestination(
             icon: Icon(
               Icons.bar_chart_outlined, // иконка для экрана отчетов
-              color: isDark ? Colors.white38 : Colors.black38,
+              color: iconDim,
             ),
             selectedIcon: Icon(Icons.bar_chart, color: accent),
             label: 'Отчёты',
@@ -294,7 +294,7 @@ class _RootPageState extends State<RootPage> {
           NavigationDestination(
             icon: Icon(
               Icons.notifications_outlined, // иконка для экрана уведомлений
-              color: isDark ? Colors.white38 : Colors.black38,
+              color: iconDim,
             ),
             selectedIcon: Icon(Icons.notifications, color: accent),
             label: 'Увед.',
@@ -302,7 +302,7 @@ class _RootPageState extends State<RootPage> {
           NavigationDestination(
             icon: Icon(
               Icons.settings_outlined, // иконка для экрана настроек
-              color: isDark ? Colors.white38 : Colors.black38,
+              color: iconDim,
             ),
             selectedIcon: Icon(Icons.settings, color: accent),
             label: 'Настройки',

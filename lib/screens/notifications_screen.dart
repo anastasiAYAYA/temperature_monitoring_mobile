@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../models/alarm_model.dart';
 import '../models/location_model.dart';
@@ -242,7 +242,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: accentColor,
-                foregroundColor: Colors.black,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -403,7 +403,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 FilledButton(
                   style: FilledButton.styleFrom(
                     backgroundColor: kCyan,
-                    foregroundColor: Colors.black,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -436,9 +436,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     setState(() => _muteLoading.remove(location.id));
 
     if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(err), backgroundColor: kRed),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(err), backgroundColor: kRed));
       return;
     }
 
@@ -740,7 +740,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 height: 14,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: isMuted ? kRed : AppColors.of(context).textDim,
+                                  color: isMuted
+                                      ? kRed
+                                      : AppColors.of(context).textDim,
                                 ),
                               )
                             : Row(
@@ -1031,9 +1033,7 @@ class _NotifToggleRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: sch.card2,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: value ? kCyan.withOpacity(0.35) : sch.border,
-        ),
+        border: Border.all(color: value ? kCyan.withOpacity(0.35) : sch.border),
       ),
       child: Row(
         children: [

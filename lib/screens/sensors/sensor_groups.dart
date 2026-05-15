@@ -23,6 +23,7 @@ class _LocationGroupState extends State<_LocationGroup> {
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     final isAdmin = widget.repo.role == UserRole.admin;
 
     // Датчики без блока управления
@@ -35,9 +36,20 @@ class _LocationGroupState extends State<_LocationGroup> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: AppColors.of(context).card,
+        color: sch.card,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.of(context).border),
+        border: Border.all(
+          color: sch.isDark ? sch.border : sch.cyan.withOpacity(0.20),
+        ),
+        boxShadow: sch.isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: sch.cyan.withOpacity(0.04),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
       ),
       child: Column(
         children: [
@@ -51,9 +63,9 @@ class _LocationGroupState extends State<_LocationGroup> {
                   Container(
                     width: 8,
                     height: 8,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: kCyan,
+                      color: sch.cyan,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -61,7 +73,7 @@ class _LocationGroupState extends State<_LocationGroup> {
                     child: Text(
                       widget.location.name,
                       style: TextStyle(
-                        color: AppColors.of(context).textMain,
+                        color: sch.textMain,
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
@@ -69,17 +81,14 @@ class _LocationGroupState extends State<_LocationGroup> {
                   ),
                   Text(
                     '$totalCount датч.',
-                    style: TextStyle(
-                      color: AppColors.of(context).textDim,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: sch.textDim, fontSize: 12),
                   ),
                   const SizedBox(width: 8),
                   Icon(
                     _expanded
                         ? Icons.keyboard_arrow_up
                         : Icons.keyboard_arrow_down,
-                    color: AppColors.of(context).textDim,
+                    color: sch.textDim,
                     size: 18,
                   ),
                 ],
@@ -88,7 +97,7 @@ class _LocationGroupState extends State<_LocationGroup> {
           ),
 
           if (_expanded) ...[
-            Container(height: 1, color: AppColors.of(context).border),
+            Container(height: 1, color: sch.border),
 
             // ── Блоки управления ───────────────────────────────────────────
             ...widget.controlUnits.map((unit) {
@@ -101,9 +110,8 @@ class _LocationGroupState extends State<_LocationGroup> {
                 sensors: unitSensors,
                 onSensorTap: widget.onSensorTap,
                 repo: widget.repo,
-                // Для админа ЦБУ раскрывается вручную (датчики скрыты по умолчанию).
-                // Для остальных ролей — датчики видны сразу.
-                initiallyExpanded: !isAdmin,
+                // ЦБУ всегда закрыт при открытии локации — раскрывается вручную.
+                initiallyExpanded: false,
               );
             }),
 
@@ -122,7 +130,9 @@ class _LocationGroupState extends State<_LocationGroup> {
               ),
 
             // Для админа: свободные датчики (без ЦБУ) показываем отдельным блоком
-            if (isAdmin && widget.controlUnits.isNotEmpty && freeSensors.isNotEmpty)
+            if (isAdmin &&
+                widget.controlUnits.isNotEmpty &&
+                freeSensors.isNotEmpty)
               _FreeSensorsGroup(
                 sensors: freeSensors,
                 onSensorTap: widget.onSensorTap,
@@ -160,9 +170,11 @@ class _FreeSensorsGroupState extends State<_FreeSensorsGroup> {
     return Container(
       margin: const EdgeInsets.fromLTRB(10, 6, 10, 0),
       decoration: BoxDecoration(
-        color: sch.card2,
+        color: sch.isDark ? sch.card2 : sch.greenBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: sch.border),
+        border: Border.all(
+          color: sch.isDark ? sch.border : sch.green.withOpacity(0.22),
+        ),
       ),
       child: Column(
         children: [
@@ -172,13 +184,13 @@ class _FreeSensorsGroupState extends State<_FreeSensorsGroup> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
                 children: [
-                  Icon(Icons.sensors, color: sch.textDim, size: 15),
+                  Icon(Icons.sensors, color: sch.green, size: 15),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Без блока управления',
                       style: TextStyle(
-                        color: sch.textDim,
+                        color: sch.green,
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
                       ),
@@ -233,6 +245,7 @@ class _ControlUnitGroup extends StatefulWidget {
   final List<SensorModel> sensors;
   final void Function(SensorModel) onSensorTap;
   final AppRepository repo;
+
   /// false = датчики скрыты при открытии (режим admin)
   final bool initiallyExpanded;
 
@@ -250,20 +263,20 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
   }
 
   Color _gsmColor(AppScheme sch, int bars) => switch (bars) {
-    5 => kGreen,
-    4 => kGreen,
-    3 => kGreen,
-    2 => kOrange,
-    1 => kRed,
+    5 => sch.green,
+    4 => sch.green,
+    3 => sch.green,
+    2 => sch.orange,
+    1 => sch.red,
     _ => sch.textDim,
   };
 
   Color _batteryColor(AppScheme sch, bool isAc, int? level) {
-    if (isAc) return kGreen;
+    if (isAc) return sch.green;
     if (level == null) return sch.textDim;
-    if (level >= 50) return kGreen;
-    if (level >= 25) return kOrange;
-    return kRed;
+    if (level >= 50) return sch.green;
+    if (level >= 25) return sch.orange;
+    return sch.red;
   }
 
   @override
@@ -282,9 +295,11 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
     return Container(
       margin: const EdgeInsets.fromLTRB(10, 6, 10, 0),
       decoration: BoxDecoration(
-        color: sch.card2,
+        color: sch.isDark ? sch.card2 : sch.yellowBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: sch.border),
+        border: Border.all(
+          color: sch.isDark ? sch.border : sch.accent.withOpacity(0.24),
+        ),
       ),
       child: Column(
         children: [
@@ -320,8 +335,8 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(
                             color: isOnline
-                                ? kGreen.withOpacity(0.3)
-                                : kRed.withOpacity(0.3),
+                                ? sch.green.withOpacity(0.3)
+                                : sch.red.withOpacity(0.3),
                           ),
                         ),
                         child: Text(
@@ -329,7 +344,7 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            color: isOnline ? kGreen : kRed,
+                            color: isOnline ? sch.green : sch.red,
                           ),
                         ),
                       ),
@@ -367,7 +382,7 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
                         if (simBalance != null)
                           _MiniChip(
                             label: '${simBalance.toStringAsFixed(0)} ₽',
-                            color: simBalance < 50 ? kRed : sch.textDim,
+                            color: simBalance < 50 ? sch.red : sch.textDim,
                           ),
                       ],
                     ),
@@ -378,7 +393,7 @@ class _ControlUnitGroupState extends State<_ControlUnitGroup> {
           ),
 
           if (_expanded && widget.sensors.isNotEmpty) ...[
-            Container(height: 1, color: AppColors.of(context).border),
+            Container(height: 1, color: sch.border),
             ...widget.sensors.mapIndexed(
               (i, sensor) => _SensorRow(
                 sensor: sensor,
@@ -455,11 +470,11 @@ class _SensorRowState extends State<_SensorRow> {
   }
 
   Color _batteryColor(AppScheme sch, bool isAc, int? level) {
-    if (isAc) return kGreen;
+    if (isAc) return sch.green;
     if (level == null) return sch.textDim;
-    if (level >= 50) return kGreen;
-    if (level >= 25) return kOrange;
-    return kRed;
+    if (level >= 50) return sch.green;
+    if (level >= 25) return sch.orange;
+    return sch.red;
   }
 
   @override
@@ -467,9 +482,9 @@ class _SensorRowState extends State<_SensorRow> {
     final sch = AppColors.of(context);
     final sensor = widget.sensor;
     final stateColor = switch (sensor.state) {
-      SensorState.normal => kGreen,
-      SensorState.warning => kOrange,
-      SensorState.critical => kRed,
+      SensorState.normal => sch.green,
+      SensorState.warning => sch.orange,
+      SensorState.critical => sch.red,
     };
 
     return GestureDetector(
@@ -477,6 +492,9 @@ class _SensorRowState extends State<_SensorRow> {
       child: Container(
         padding: EdgeInsets.fromLTRB(widget.indent ? 20 : 14, 11, 14, 11),
         decoration: BoxDecoration(
+          color: sch.isDark
+              ? Colors.transparent
+              : stateColor.withOpacity(widget.indent ? 0.035 : 0.025),
           border: widget.isLast
               ? null
               : Border(bottom: BorderSide(color: sch.border)),
@@ -532,9 +550,9 @@ class _SensorRowState extends State<_SensorRow> {
                       _hum != null
                           ? Text(
                               '${_hum!.toStringAsFixed(1)}%',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: kCyan,
+                                color: sch.cyan,
                                 fontWeight: FontWeight.w600,
                               ),
                             )

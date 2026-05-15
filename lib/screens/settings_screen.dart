@@ -597,16 +597,30 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     final availableRoles = <String>[if (isAdmin) 'admin', 'editor', 'viewer'];
     String roleName = 'viewer';
-    int? selectedLocation = widget.repo.locations.isNotEmpty
-        ? widget.repo.locations.first.id
-        : null;
+
+    // Если admin уже открыл конкретную компанию — фиксируем её и не показываем дропдаун.
+    // Если admin на экране списка компаний — показываем дропдаун, дефолт: первая локация.
+    final lockedLocationId = _adminSelectedLocationId;
+    int? selectedLocation =
+        lockedLocationId ??
+        (widget.repo.locations.isNotEmpty ? widget.repo.locations.first.id : null);
     bool obscurePass = true;
 
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) {
-          final showLocation = isAdmin && widget.repo.locations.isNotEmpty;
+          // Дропдаун: admin и НЕ зафиксирована конкретная локация.
+          final showLocationDropdown =
+              isAdmin && lockedLocationId == null && widget.repo.locations.isNotEmpty;
+
+          // Плашка с именем фиксированной локации (admin внутри компании).
+          final lockedLocationName = lockedLocationId != null
+              ? widget.repo.locations
+                    .where((l) => l.id == lockedLocationId)
+                    .firstOrNull
+                    ?.name
+              : null;
 
           return _DarkDialog(
             title: 'Новый сотрудник',
@@ -657,7 +671,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                         .toList(),
                     onChanged: (v) => setSt(() => roleName = v ?? roleName),
                   ),
-                  if (showLocation) ...[
+                  // Дропдаун локации — только если admin на экране списка компаний
+                  if (showLocationDropdown) ...[
                     const SizedBox(height: 10),
                     _DarkDropdown<int>(
                       label: 'Локация',
@@ -673,6 +688,58 @@ class _SettingsScreenState extends State<SettingsScreen>
                       onChanged: (v) => setSt(() => selectedLocation = v),
                     ),
                   ],
+                  // Плашка зафиксированной локации — admin внутри компании
+                  if (isAdmin && lockedLocationName != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: kCyan.withOpacity(0.07),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: kCyan.withOpacity(0.25)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.business_outlined,
+                            size: 14,
+                            color: kCyan,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Компания',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.of(context).textDim,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  lockedLocationName,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: kCyan,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  // Плашка для editor (локация назначается автоматически сервером)
                   if (isEditor) ...[
                     const SizedBox(height: 8),
                     Container(

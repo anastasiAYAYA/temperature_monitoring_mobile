@@ -170,7 +170,9 @@ class _SensorDetailDialogState extends State<_SensorDetailDialog> {
     final points = _showTemperature ? _tempPoints : _humPoints;
     final unit = _showTemperature ? '°C' : '%';
     final label = _showTemperature ? 'Температура' : 'Влажность';
-    final color = _showTemperature ? AppColors.of(context).accent : kCyan;
+    final color = _showTemperature
+        ? AppColors.of(context).accent
+        : AppColors.of(context).cyan;
     final warningMin = _showTemperature ? s.warningMinTemp : s.warningMinHum;
     final warningMax = _showTemperature ? s.warningMaxTemp : s.warningMaxHum;
     final alarmMin = _showTemperature ? s.alarmMinTemp : s.alarmMinHum;
@@ -247,7 +249,7 @@ class _SensorDetailDialogState extends State<_SensorDetailDialog> {
               _StatCell(
                 label: 'МИН',
                 value: '${minVal.toStringAsFixed(1)}$unit',
-                color: kCyan,
+                color: AppColors.of(context).cyan,
               ),
               _VertDivider(),
               _StatCell(
@@ -326,17 +328,20 @@ class _SensorDetailDialogState extends State<_SensorDetailDialog> {
               _ChartToggleBtn(
                 label: 'Влажность',
                 selected: !_showTemperature,
-                color: kCyan,
+                color: AppColors.of(context).cyan,
                 onTap: () => setState(() => _showTemperature = false),
               ),
             ],
           ),
           const SizedBox(height: 8),
           if (_loading)
-            const SizedBox(
+            SizedBox(
               height: 120,
               child: Center(
-                child: CircularProgressIndicator(color: kCyan, strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  color: AppColors.of(context).cyan,
+                  strokeWidth: 2,
+                ),
               ),
             )
           else

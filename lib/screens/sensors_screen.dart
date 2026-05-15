@@ -172,12 +172,12 @@ class _SensorsScreenState extends State<SensorsScreen> {
                     SnackBar(
                       content: Row(
                         children: [
-                          Icon(Icons.check_circle, color: kGreen, size: 16),
+                          Icon(Icons.check_circle, color: c.green, size: 16),
                           const SizedBox(width: 8),
                           const Text('Блок управления успешно создан'),
                         ],
                       ),
-                      backgroundColor: const Color(0xFF0D2B1F),
+                      backgroundColor: c.greenBg,
                     ),
                   );
                 }
@@ -392,13 +392,13 @@ class _SensorsScreenState extends State<SensorsScreen> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: kCyan.withOpacity(0.07),
+                        color: c.cyan.withOpacity(0.07),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: kCyan.withOpacity(0.2)),
+                        border: Border.all(color: c.cyan.withOpacity(0.2)),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Правило: Тревога min ≤ Внимание min < Внимание max ≤ Тревога max',
-                        style: TextStyle(fontSize: 11, color: kCyan),
+                        style: TextStyle(fontSize: 11, color: c.cyan),
                       ),
                     ),
                   ],
@@ -540,7 +540,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: kCyan),
+                    borderSide: BorderSide(color: c.cyan),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -582,11 +582,11 @@ class _SensorsScreenState extends State<SensorsScreen> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: kCyan.withOpacity(0.12),
+                      color: c.cyan.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: kCyan.withOpacity(0.35)),
+                      border: Border.all(color: c.cyan.withOpacity(0.35)),
                     ),
-                    child: const Icon(Icons.add, color: kCyan, size: 20),
+                    child: Icon(Icons.add, color: c.cyan, size: 20),
                   ),
                 ),
             ],

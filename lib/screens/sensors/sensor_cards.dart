@@ -29,15 +29,20 @@ class _LiveReadingsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: sch.card2,
+        color: sch.isDark ? sch.card2 : sch.card,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: sch.border),
+        border: Border.all(
+          color: sch.isDark ? sch.border : sch.cyan.withOpacity(0.18),
+        ),
       ),
       child: loading
-          ? const SizedBox(
+          ? SizedBox(
               height: 48,
               child: Center(
-                child: CircularProgressIndicator(color: kCyan, strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  color: AppColors.of(context).cyan,
+                  strokeWidth: 2,
+                ),
               ),
             )
           : Column(
@@ -63,11 +68,11 @@ class _LiveReadingsCard extends StatelessWidget {
                           height: 6,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: isOnline ? kGreen : sch.textDim,
+                            color: isOnline ? sch.green : sch.textDim,
                             boxShadow: isOnline
                                 ? [
                                     BoxShadow(
-                                      color: kGreen.withOpacity(0.5),
+                                      color: sch.green.withOpacity(0.5),
                                       blurRadius: 4,
                                     ),
                                   ]
@@ -151,18 +156,20 @@ class _LiveReadingsCard extends StatelessWidget {
                             horizontal: 12,
                           ),
                           decoration: BoxDecoration(
-                            color: kCyan.withOpacity(0.08),
+                            color: sch.cyan.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: kCyan.withOpacity(0.25)),
+                            border: Border.all(
+                              color: sch.cyan.withOpacity(0.25),
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
-                                  const Icon(
+                                  Icon(
                                     Icons.water_drop_outlined,
-                                    color: kCyan,
+                                    color: sch.cyan,
                                     size: 13,
                                   ),
                                   const SizedBox(width: 4),
@@ -180,10 +187,10 @@ class _LiveReadingsCard extends StatelessWidget {
                                 hum != null
                                     ? '${hum!.toStringAsFixed(1)} %'
                                     : '—',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w800,
-                                  color: kCyan,
+                                  color: sch.cyan,
                                   letterSpacing: -0.5,
                                 ),
                               ),
@@ -211,9 +218,11 @@ class _HardwareStatusCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: sch.card2,
+        color: sch.isDark ? sch.card2 : sch.greenBg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: sch.border),
+        border: Border.all(
+          color: sch.isDark ? sch.border : sch.green.withOpacity(0.20),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,8 +246,8 @@ class _HardwareStatusCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(
                     color: sensor.isOnline
-                        ? kGreen.withOpacity(0.35)
-                        : kRed.withOpacity(0.35),
+                        ? sch.green.withOpacity(0.35)
+                        : sch.red.withOpacity(0.35),
                   ),
                 ),
                 child: Text(
@@ -246,7 +255,7 @@ class _HardwareStatusCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: sensor.isOnline ? kGreen : kRed,
+                    color: sensor.isOnline ? sch.green : sch.red,
                   ),
                 ),
               ),
@@ -268,13 +277,14 @@ class _PowerCol extends StatelessWidget {
   Widget build(BuildContext context) {
     final isAc = sensor.isAcPowered;
     final battery = sensor.batteryLevel;
+    final sch = AppColors.of(context);
     final color = isAc
-        ? kGreen
+        ? sch.green
         : (battery != null && battery < 25
-              ? kRed
+              ? sch.red
               : battery != null && battery < 50
-              ? kOrange
-              : kGreen);
+              ? sch.orange
+              : sch.green);
     final value = isAc ? 'Сеть 220В' : (battery != null ? '$battery%' : '—');
 
     return _StatCol(
@@ -295,13 +305,13 @@ class _GsmCol extends StatelessWidget {
     final bars = sensor.gsmBars;
     final hasSignal = sensor.gsmSignal != null;
     final color = bars >= 4
-        ? kGreen
+        ? AppColors.of(context).green
         : bars == 3
-        ? kGreen
+        ? AppColors.of(context).green
         : bars == 2
-        ? kOrange
+        ? AppColors.of(context).orange
         : bars == 1
-        ? kRed
+        ? AppColors.of(context).red
         : AppColors.of(context).textDim;
 
     return _StatCol(
@@ -323,10 +333,10 @@ class _SimCol extends StatelessWidget {
     final color = balance == null
         ? AppColors.of(context).textDim
         : balance < 50
-        ? kRed
+        ? AppColors.of(context).red
         : balance < 150
-        ? kOrange
-        : kGreen;
+        ? AppColors.of(context).orange
+        : AppColors.of(context).green;
 
     return _StatCol(
       label: 'SIM',
@@ -390,10 +400,10 @@ class _BatteryBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = level < 25
-        ? kRed
+        ? AppColors.of(context).red
         : level < 50
-        ? kOrange
-        : kGreen;
+        ? AppColors.of(context).orange
+        : AppColors.of(context).green;
     return SizedBox(
       width: 44,
       child: Stack(
@@ -428,12 +438,12 @@ class _GsmBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = bars >= 4
-        ? kGreen
+        ? AppColors.of(context).green
         : bars == 3
-        ? kGreen
+        ? AppColors.of(context).green
         : bars == 2
-        ? kOrange
-        : kRed;
+        ? AppColors.of(context).orange
+        : AppColors.of(context).red;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       spacing: 2,
@@ -459,10 +469,11 @@ class _MiniChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: sch.isDark ? color.withOpacity(0.1) : Colors.white,
         borderRadius: BorderRadius.circular(3),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
@@ -551,6 +562,7 @@ class _PeriodTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     return Row(
       spacing: 6,
       children: ['День', 'Неделя', 'Месяц'].map((p) {
@@ -560,21 +572,17 @@ class _PeriodTabs extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: active
-                  ? kCyan.withOpacity(0.15)
-                  : AppColors.of(context).card2,
+              color: active ? sch.cyan.withOpacity(0.12) : sch.card,
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                color: active
-                    ? kCyan.withOpacity(0.5)
-                    : AppColors.of(context).border,
+                color: active ? sch.cyan.withOpacity(0.45) : sch.border,
               ),
             ),
             child: Text(
               p,
               style: TextStyle(
                 fontSize: 12,
-                color: active ? kCyan : AppColors.of(context).textDim,
+                color: active ? sch.cyan : sch.textDim,
                 fontWeight: active ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
@@ -599,26 +607,23 @@ class _ChartToggleBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sch = AppColors.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: selected
-              ? color.withOpacity(0.15)
-              : AppColors.of(context).card2,
+          color: selected ? color.withOpacity(0.15) : sch.card,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: selected
-                ? color.withOpacity(0.5)
-                : AppColors.of(context).border,
+            color: selected ? color.withOpacity(0.5) : sch.border,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12,
-            color: selected ? color : AppColors.of(context).textDim,
+            color: selected ? color : sch.textDim,
             fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
           ),
         ),

@@ -188,7 +188,7 @@ class _AppFilledBtn extends StatelessWidget {
     return FilledButton(
       style: FilledButton.styleFrom(
         backgroundColor: kCyan,
-        foregroundColor: Colors.black,
+        foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       onPressed: onTap,

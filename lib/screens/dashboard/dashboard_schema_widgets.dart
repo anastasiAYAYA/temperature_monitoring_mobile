@@ -167,9 +167,7 @@ class _EditableSchemaState extends State<_EditableSchema> {
         final width = constraints.maxWidth;
         final ratio = _aspectRatio ?? (16 / 9);
         final height = width / ratio;
-        final schemaBg = c.isDark
-            ? const Color(0xFF060E0F)
-            : const Color(0xFFF0F4F8);
+        final schemaBg = c.isDark ? const Color(0xFF060E0F) : c.card2;
         return SizedBox(
           width: width,
           height: height,

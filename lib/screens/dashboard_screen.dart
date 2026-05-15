@@ -781,8 +781,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 10),
             ],
-            _buildSchemaCard(c, currentLocation, sensors, canManage: false),
-            const SizedBox(height: 14),
+            if (currentLocation?.imageUrl != null) ...[
+              _buildSchemaCard(c, currentLocation, sensors, canManage: false),
+              const SizedBox(height: 14),
+            ],
             if (sensors.isNotEmpty) ...[
               _SectionHeader(label: 'Датчики', count: sensors.length),
               const SizedBox(height: 8),
@@ -863,9 +865,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   )
                 : Container(
                     height: 200,
-                    color: c.isDark
-                        ? const Color(0xFF060E0F)
-                        : const Color(0xFFF0F4F8),
+                    color: c.isDark ? const Color(0xFF060E0F) : c.card2,
                     alignment: Alignment.center,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
